@@ -80,3 +80,25 @@ def test_domino_and_nowcast(client):
     assert "Citi Bike NYC Micromobility" in data_now["sector_predictions"]
     assert "E-Commerce & Online Retail Store" in data_now["sector_predictions"]
     assert "Chipotle Mexican Grill (SEC 10-Q)" in data_now["sector_predictions"]
+
+def test_eda_presentation_and_audit(client):
+    # Test EDA audit endpoint
+    res_audit = client.get("/api/eda-audit")
+    assert res_audit.status_code == 200
+    data_audit = res_audit.get_json()
+    assert "rows" in data_audit
+    assert len(data_audit["rows"]) == 5
+
+    # Test EDA page for each of the 4 production series
+    for series in ["nyc_taxi", "citibike_nyc", "online_retail", "chipotle_sec"]:
+        res_eda = client.get(f"/eda?series={series}")
+        assert res_eda.status_code == 200
+        assert b"Academic EDA Presentation" in res_eda.data
+        assert b"Understand the unit of observation" in res_eda.data
+
+def test_notebook_walkthrough(client):
+    res_nb = client.get("/notebook")
+    assert res_nb.status_code == 200
+    assert b"Notebook Walkthrough" in res_nb.data
+    assert b"Load verified production Parquet datasets" in res_nb.data
+

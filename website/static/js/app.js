@@ -57,11 +57,14 @@ function setupTabNavigation() {
 
 // Setup Event Listeners
 function setupEventListeners() {
-    // City Selector
-    document.getElementById("citySelect").addEventListener("change", async (e) => {
-        state.city = e.target.value;
-        await refreshAllForNewCity();
-    });
+    // City Selector (if present)
+    const citySelect = document.getElementById("citySelect");
+    if (citySelect) {
+        citySelect.addEventListener("change", async (e) => {
+            state.city = e.target.value;
+            await refreshAllForNewCity();
+        });
+    }
 
     // Single Business Selector Dropdown
     const businessSelect = document.getElementById("businessSelect");
@@ -69,7 +72,9 @@ function setupEventListeners() {
         businessSelect.addEventListener("change", async (e) => {
             state.selectedKey = e.target.value;
             state.selectedKeys = [state.selectedKey];
+            state.inspectedDayIdx = null;
             updateCadenceBadge(state.selectedKey);
+            updateHorizonOptions(state.selectedKey);
             await loadPortfolioData();
             if (state.activeTab === "tab3") await loadDominoData();
             if (state.activeTab === "tab4") await loadNowcastData();
@@ -341,6 +346,44 @@ function renderBusinessDropdown() {
 
     select.value = state.selectedKey;
     updateCadenceBadge(state.selectedKey);
+    updateHorizonOptions(state.selectedKey);
+}
+
+function updateHorizonOptions(bKey) {
+    const sel = document.getElementById("horizonSelect");
+    if (!sel) return;
+    if (bKey === "nyc_taxi") {
+        sel.innerHTML = `
+            <option value="Last 7 Days (1 Week)">Last 7 Days (1 Week)</option>
+            <option value="Last 14 Days (2 Weeks)">Last 14 Days (2 Weeks)</option>
+            <option value="Full Month (All 31 Days)" selected>Full Month (All 31 Days)</option>
+        `;
+    } else if (bKey === "citibike_nyc") {
+        sel.innerHTML = `
+            <option value="Last 30 Days (1 Month)">Last 30 Days (1 Month)</option>
+            <option value="Last 90 Days (3 Months)">Last 90 Days (3 Months)</option>
+            <option value="Full Season (All 120 Days)" selected>Full Season (All 120 Days)</option>
+        `;
+    } else if (bKey === "online_retail") {
+        sel.innerHTML = `
+            <option value="Last 3 Months (90 Days)">Last 3 Months (90 Days)</option>
+            <option value="Last 6 Months (180 Days)">Last 6 Months (180 Days)</option>
+            <option value="Full Year (All 305 Days)" selected>Full Year (All 305 Days)</option>
+        `;
+    } else if (bKey === "chipotle_sec") {
+        sel.innerHTML = `
+            <option value="Last 1 Year (4 Quarters)">Last 1 Year (4 Quarters)</option>
+            <option value="Last 2 Years (8 Quarters)" selected>Last 2 Years (8 Quarters)</option>
+            <option value="Full History (All 27 Filings)">Full History (All 27 Filings)</option>
+        `;
+    } else {
+        sel.innerHTML = `
+            <option value="Last 3 Months (90 Days)">Last 3 Months (90 Days)</option>
+            <option value="Last 6 Months (180 Days)" selected>Last 6 Months (180 Days)</option>
+            <option value="Full 2 Years (All Data)">Full 2 Years (All Data)</option>
+        `;
+    }
+    state.horizon = sel.value;
 }
 
 const renderPortfolioChips = renderBusinessDropdown;
@@ -446,66 +489,6 @@ async function loadPortfolioData() {
 function render7DayChart(chartData, cadence) {
     const traces = [];
 
-    if (cadence === "quarterly") {
-        chartData.businesses.forEach(b => {
-            // Actual Quarterly Revenue as Bars
-            traces.push({
-                x: chartData.x_labels,
-                y: b.actual,
-                name: `${b.clean_label} — Reported 10-Q`,
-                type: "bar",
-                marker: { color: b.color || "#F59E0B", opacity: 0.88, line: { color: "#FBBF24", width: 1.2 } },
-                hovertemplate: `<b>%{x}</b><br>Reported Net Revenue: $%{y:,.0f}<extra></extra>`
-            });
-
-            // Baseline Expectation as Line
-            traces.push({
-                x: chartData.x_labels,
-                y: b.baseline,
-                name: `${b.clean_label} — Baseline Expectation`,
-                mode: "lines+markers",
-                line: { color: "#FFFFFF", width: 2.2, dash: "dash" },
-                marker: { size: 8, color: "#FFFFFF", symbol: "diamond" },
-                hovertemplate: `<b>%{x} Baseline</b><br>Expected Revenue: $%{y:,.0f}<extra></extra>`
-            });
-        });
-
-        const layout = {
-            template: "plotly_dark",
-            paper_bgcolor: "#111827",
-            plot_bgcolor: "#111827",
-            font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
-            height: 520,
-            margin: { l: 85, r: 25, t: 30, b: 90 },
-            yaxis: {
-                title: { text: "Reported Net Revenue ($ USD)", standoff: 18 },
-                automargin: true,
-                fixedrange: true,
-                gridcolor: "rgba(56, 189, 248, 0.10)",
-                zeroline: false
-            },
-            xaxis: {
-                fixedrange: true,
-                gridcolor: "rgba(255, 255, 255, 0.05)",
-                tickfont: { size: 11, color: "#CBD5E1" }
-            },
-            legend: {
-                orientation: "h",
-                yanchor: "top",
-                y: -0.20,
-                xanchor: "center",
-                x: 0.5,
-                font: { size: 11, color: "#E2E8F0" },
-                bgcolor: "rgba(17, 24, 39, 0.8)",
-                bordercolor: "rgba(255, 255, 255, 0.12)",
-                borderwidth: 1
-            }
-        };
-
-        Plotly.newPlot("chart7d", traces, layout, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
-        return;
-    }
-
     // Revenue traces for each business (Solid actual, dashed baseline)
     chartData.businesses.forEach(b => {
         traces.push({
@@ -549,11 +532,11 @@ function render7DayChart(chartData, cadence) {
     });
 
     const layout = {
-        template: "plotly_dark",
-        paper_bgcolor: "#111827",
-        plot_bgcolor: "#111827",
-        font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
-        height: 530,
+        template: "plotly_white",
+        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#ffffff",
+        font: { family: "Inter, -apple-system, sans-serif", size: 11, color: "#172f2b" },
+        height: 520,
         margin: { l: 85, r: 25, t: 30, b: 120 },
         grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
         yaxis: {
@@ -561,7 +544,7 @@ function render7DayChart(chartData, cadence) {
             automargin: true,
             fixedrange: true,
             domain: [0.38, 1.0],
-            gridcolor: "rgba(56, 189, 248, 0.10)",
+            gridcolor: "#e7ebe3",
             zeroline: false
         },
         yaxis2: {
@@ -569,13 +552,13 @@ function render7DayChart(chartData, cadence) {
             automargin: true,
             fixedrange: true,
             domain: [0.0, 0.26],
-            gridcolor: "rgba(56, 189, 248, 0.10)",
+            gridcolor: "#e7ebe3",
             zeroline: false
         },
         xaxis: {
             fixedrange: true,
-            gridcolor: "rgba(255, 255, 255, 0.05)",
-            tickfont: { size: 10.5, color: "#CBD5E1" }
+            gridcolor: "#e7ebe3",
+            tickfont: { size: 10.5, color: "#64736c" }
         },
         legend: {
             orientation: "h",
@@ -583,9 +566,9 @@ function render7DayChart(chartData, cadence) {
             y: -0.28,
             xanchor: "center",
             x: 0.5,
-            font: { size: 10.5, color: "#E2E8F0" },
-            bgcolor: "rgba(17, 24, 39, 0.8)",
-            bordercolor: "rgba(255, 255, 255, 0.12)",
+            font: { size: 10.5, color: "#172f2b" },
+            bgcolor: "#ffffff",
+            bordercolor: "#dce2d8",
             borderwidth: 1
         }
     };
@@ -605,6 +588,10 @@ function renderDayInReview(dayReview, chart7d, cadence) {
         if (idx === dayReview.inspected_idx) opt.selected = true;
         daySelect.appendChild(opt);
     });
+
+    if (dayReview.inspected_idx !== undefined && dayReview.inspected_idx !== null) {
+        daySelect.value = String(dayReview.inspected_idx);
+    }
 
     document.getElementById("dayHeaderSummary").innerHTML = `
         <strong>Interval:</strong> ${dayReview.day_name} (${dayReview.date_str}) &nbsp;|&nbsp; 
@@ -633,11 +620,11 @@ function renderDayInReview(dayReview, chart7d, cadence) {
                     <span class="insight-title">${name}</span>
                     <span class="${badgeCls}">${sign}${Math.abs(Math.round(delta)).toLocaleString()} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(1)}%)</span>
                 </div>
-                <div style="font-size: 0.80rem; color: #94A3B8; font-weight: 600; margin-bottom: 8px;">
+                <div style="font-size: 0.82rem; color: var(--ink); font-weight: 600; margin-bottom: 8px;">
                     Earned: ${formatCurrency(actualRev).replace(/^\+/, '')} &nbsp;|&nbsp; Normal: ${formatCurrency(baselineRev).replace(/^\+/, '')}
                 </div>
                 <div class="insight-content">
-                    <strong style="color: #FFFFFF;">${ins.headline || ''}</strong><br/>
+                    <strong style="color: var(--ink); font-size: 0.92rem; display: block; margin-bottom: 5px;">${ins.headline || ''}</strong>
                     ${bullets.map(b => `• ${b}`).join("<br/>")}
                 </div>
             </div>
@@ -761,87 +748,55 @@ function renderDayInReview(dayReview, chart7d, cadence) {
 function renderHistoricalChart(hist, cadence) {
     const traces = [];
 
-    if (cadence === "quarterly") {
-        hist.businesses.forEach(b => {
-            traces.push({
-                x: hist.display_dates || hist.dates,
-                y: b.actual,
-                name: b.clean_label,
-                type: "bar",
-                marker: { color: b.color || "#F59E0B", line: { color: "#FBBF24", width: 1.2 } },
-                hovertemplate: `<b>${b.name}</b><br>Quarter: %{x}<br>Reported Revenue: $%{y:,.0f}<extra></extra>`
-            });
-        });
-
-        const layout = {
-            template: "plotly_dark",
-            paper_bgcolor: "#111827",
-            plot_bgcolor: "#111827",
-            font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
-            height: 520,
-            margin: { l: 85, r: 25, t: 30, b: 90 },
-            yaxis: {
-                title: { text: "Quarterly Revenue ($ USD)", standoff: 18 },
-                automargin: true,
-                fixedrange: true,
-                gridcolor: "rgba(56, 189, 248, 0.10)",
-                zeroline: false
-            },
-            xaxis: {
-                type: "category",
-                fixedrange: true,
-                gridcolor: "rgba(255, 255, 255, 0.05)",
-                tickfont: { size: 11, color: "#CBD5E1" }
-            },
-            legend: {
-                orientation: "h",
-                yanchor: "top",
-                y: -0.22,
-                xanchor: "center",
-                x: 0.5,
-                font: { size: 11, color: "#E2E8F0" },
-                bgcolor: "rgba(17, 24, 39, 0.8)",
-                bordercolor: "rgba(255, 255, 255, 0.12)",
-                borderwidth: 1
-            }
-        };
-
-        Plotly.newPlot("chartHistorical", traces, layout, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
-        return;
-    }
-
     hist.businesses.forEach(b => {
+        // Actual Solid Line
         traces.push({
             x: hist.dates,
             y: b.actual,
-            name: b.clean_label,
+            name: `${b.clean_label} — Actual`,
             mode: "lines+markers",
+            legendgroup: b.key,
             line: { color: b.color, width: 2.8 },
-            marker: { size: 6, color: b.color, symbol: b.symbol },
+            marker: { size: 6, color: b.color, symbol: b.symbol || "circle" },
             yaxis: "y1",
-            hovertemplate: `<b>${b.name}</b><br>Date: %{x}<br>Weekly Sales: $%{y:,.0f}<extra></extra>`
+            hovertemplate: `<b>${b.name}</b><br>Date: %{x}<br>Actual Sales: $%{y:,.0f}<extra></extra>`
         });
+
+        // Baseline Dashed Line
+        if (b.baseline && b.baseline.length) {
+            traces.push({
+                x: hist.dates,
+                y: b.baseline,
+                name: `${b.clean_label} — Baseline`,
+                mode: "lines",
+                legendgroup: b.key,
+                line: { color: b.color, width: 1.8, dash: "dash" },
+                opacity: 0.65,
+                yaxis: "y1",
+                hovertemplate: `<b>${b.name} (Baseline)</b><br>Date: %{x}<br>Expected Sales: $%{y:,.0f}<extra></extra>`
+            });
+        }
     });
 
     traces.push({
         x: hist.dates,
         y: hist.rainfall,
-        name: "Weekly Rain (mm)",
+        name: "Rainfall (mm)",
         mode: "lines",
         line: { color: "#38BDF8", width: 1.8 },
         fill: "tozeroy",
         fillcolor: "rgba(56, 189, 248, 0.12)",
         yaxis: "y2",
         showlegend: false,
-        hovertemplate: "Weekly Rain: %{y:.1f} mm<extra></extra>"
+        hovertemplate: "Rainfall: %{y:.1f} mm<extra></extra>"
     });
 
     const layout = {
-        template: "plotly_dark",
-        paper_bgcolor: "#111827",
-        plot_bgcolor: "#111827",
-        font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
-        height: 550,
+        template: "plotly_white",
+        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#ffffff",
+        font: { family: "Inter, -apple-system, sans-serif", size: 11, color: "#172f2b" },
+        height: 520,
         margin: { l: 85, r: 25, t: 30, b: 130 },
         grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
         yaxis: {
@@ -849,7 +804,7 @@ function renderHistoricalChart(hist, cadence) {
             automargin: true,
             fixedrange: true,
             domain: [0.38, 1.0],
-            gridcolor: "rgba(56, 189, 248, 0.10)",
+            gridcolor: "#e7ebe3",
             zeroline: false
         },
         yaxis2: {
@@ -857,14 +812,14 @@ function renderHistoricalChart(hist, cadence) {
             automargin: true,
             fixedrange: true,
             domain: [0.0, 0.26],
-            gridcolor: "rgba(56, 189, 248, 0.10)",
+            gridcolor: "#e7ebe3",
             zeroline: false
         },
         xaxis: {
             type: "date",
             fixedrange: true,
-            gridcolor: "rgba(56, 189, 248, 0.08)",
-            tickfont: { size: 10.5, color: "#CBD5E1" }
+            gridcolor: "#e7ebe3",
+            tickfont: { size: 10.5, color: "#64736c" }
         },
         legend: {
             orientation: "h",
@@ -872,9 +827,9 @@ function renderHistoricalChart(hist, cadence) {
             y: -0.32,
             xanchor: "center",
             x: 0.5,
-            font: { size: 10.5, color: "#E2E8F0" },
-            bgcolor: "rgba(17, 24, 39, 0.8)",
-            bordercolor: "rgba(255, 255, 255, 0.12)",
+            font: { size: 10.5, color: "#172f2b" },
+            bgcolor: "#ffffff",
+            bordercolor: "#dce2d8",
             borderwidth: 1
         }
     };
@@ -933,8 +888,8 @@ async function loadDominoData() {
         // 2. Tipping Point Card
         const tp = cascade.tipping_point;
         document.getElementById("tippingPointCard").innerHTML = `
-            <div class="ripple-title" style="color: #FBBF24;">${tp.title}</div>
-            <div style="font-size: 0.86rem; color: #CBD5E1; line-height: 1.6; margin-top: 8px;">
+            <div class="ripple-title" style="color: var(--orange);">${tp.title}</div>
+            <div style="font-size: 0.86rem; color: var(--ink); line-height: 1.6; margin-top: 8px;">
                 When weather conditions cross operational thresholds in <strong>${cascade.city_name}</strong>, economic channels fracture non-linearly:<br/>
                 • <strong>Customer Demand:</strong> ${tp.demand}<br/>
                 • <strong>Courier & Service Supply:</strong> ${tp.supply}<br/>
@@ -981,7 +936,7 @@ async function loadDominoData() {
                 </div>
             `).join("");
         } else {
-            substContainer.innerHTML = `<div style="color:#94A3B8; font-size:0.85rem; padding:8px 0;">Select complementary businesses (e.g., Square POS and Stripe, or Restaurants and Food Delivery) to view substitution flows.</div>`;
+            substContainer.innerHTML = `<div style="color: var(--muted); font-size:0.85rem; padding:8px 0;">Select complementary businesses (e.g., Square POS and Stripe, or Restaurants and Food Delivery) to view substitution flows.</div>`;
         }
 
         // 5. Past 30 Days Net Shift Chart
@@ -1004,24 +959,24 @@ function render30DayShiftChart(c30) {
     }));
 
     const layout = {
-        template: "plotly_dark",
-        paper_bgcolor: "#111827",
-        plot_bgcolor: "#111827",
-        font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
-        height: 500,
+        template: "plotly_white",
+        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#ffffff",
+        font: { family: "Inter, -apple-system, sans-serif", size: 11, color: "#172f2b" },
+        height: 480,
         margin: { l: 85, r: 25, t: 20, b: 110 },
         yaxis: {
             title: { text: "Sales Shift ($ USD)", standoff: 18 },
             automargin: true,
             fixedrange: true,
-            gridcolor: "rgba(56, 189, 248, 0.10)",
+            gridcolor: "#e7ebe3",
             zeroline: true,
-            zerolinecolor: "rgba(56, 189, 248, 0.35)"
+            zerolinecolor: "#dce2d8"
         },
         xaxis: {
             fixedrange: true,
-            gridcolor: "rgba(255, 255, 255, 0.05)",
-            tickfont: { size: 10, color: "#CBD5E1" }
+            gridcolor: "#e7ebe3",
+            tickfont: { size: 10, color: "#64736c" }
         },
         legend: {
             orientation: "h",
@@ -1029,9 +984,9 @@ function render30DayShiftChart(c30) {
             y: -0.26,
             xanchor: "center",
             x: 0.5,
-            font: { size: 10.5, color: "#E2E8F0" },
-            bgcolor: "rgba(17, 24, 39, 0.8)",
-            bordercolor: "rgba(255, 255, 255, 0.12)",
+            font: { size: 10.5, color: "#172f2b" },
+            bgcolor: "#ffffff",
+            bordercolor: "#dce2d8",
             borderwidth: 1
         }
     };
@@ -1070,10 +1025,10 @@ async function loadNowcastData() {
 
         document.getElementById("nowcastBanner").innerHTML = `
             <div>
-                <span style="font-weight: 700; color: #F8FAFC; font-size: 0.92rem;">Nowcasting Conditions:</span>
-                <span style="color: #38BDF8; font-weight: 600; margin-left: 6px;">${p.day_name} at ${String(p.hour).padStart(2, '0')}:00</span> &bull; 
-                <span style="color: #E2E8F0;">${p.live_condition}</span> 
-                (<strong style="color: #FFFFFF;">${p.rain.toFixed(1)} mm/h rain</strong>, <strong style="color: #FFFFFF;">${p.temp_anom >= 0 ? '+' : ''}${p.temp_anom.toFixed(1)}°C anomaly</strong>)
+                <span style="font-weight: 700; color: var(--ink); font-size: 0.92rem;">Nowcasting Conditions:</span>
+                <span style="color: var(--teal); font-weight: 600; margin-left: 6px;">${p.day_name} at ${String(p.hour).padStart(2, '0')}:00</span> &bull; 
+                <span style="color: var(--ink);">${p.live_condition}</span> 
+                (<strong style="color: var(--ink);">${p.rain.toFixed(1)} mm/h rain</strong>, <strong style="color: var(--ink);">${p.temp_anom >= 0 ? '+' : ''}${p.temp_anom.toFixed(1)}°C anomaly</strong>)
             </div>
             ${customBadge}
         `;
@@ -1088,7 +1043,7 @@ async function loadNowcastData() {
                 <div class="sector-title">${secName}</div>
                 ${metrics.map(m => `
                     <div class="metric-row">
-                        <span style="font-weight:600; color:#F8FAFC;">${m.display_name}</span>
+                        <span style="font-weight:600; color:var(--ink);">${m.display_name}</span>
                         <span>${typeof m.weather_impacted === 'number' ? m.weather_impacted.toLocaleString() : m.weather_impacted} ${m.unit} <span class="${m.delta_pct >= 0 ? 'status-positive' : 'status-negative'}">${m.delta_pct >= 0 ? '+' : ''}${m.delta_pct.toFixed(1)}%</span></span>
                     </div>
                 `).join("")}
@@ -1099,12 +1054,12 @@ async function loadNowcastData() {
         // 3. 7-Day Forecast Weather Strip
         const strip = document.getElementById("forecastStrip");
         strip.innerHTML = data.daily_forecast_strip.map(day => `
-            <div class="fc-day-card">
-                <div style="font-size: 0.84rem; font-weight: 700; color: #38BDF8;">${day.day_name}</div>
-                <div style="font-size: 0.70rem; color: #94A3B8; margin-bottom: 4px;">${day.date.slice(-5)}</div>
-                <div style="font-size: 0.88rem; font-weight: 700; color: #F8FAFC;">${Math.round(day.temp_max)}° / ${Math.round(day.temp_min)}°</div>
-                <div style="font-size: 0.74rem; color: #E2E8F0; margin-top: 4px;">${day.condition}</div>
-                <div style="font-size: 0.74rem; color: ${day.precip_mm > 0 ? '#00D2FF' : '#64748B'}; font-weight: 600; margin-top: 2px;">
+            <div class="forecast-day-card">
+                <div style="font-size: 0.84rem; font-weight: 700; color: var(--teal);">${day.day_name}</div>
+                <div style="font-size: 0.70rem; color: var(--muted); margin-bottom: 4px;">${day.date.slice(-5)}</div>
+                <div style="font-size: 0.88rem; font-weight: 700; color: var(--ink);">${Math.round(day.temp_max)}° / ${Math.round(day.temp_min)}°</div>
+                <div style="font-size: 0.74rem; color: var(--muted); margin-top: 4px;">${day.condition}</div>
+                <div style="font-size: 0.74rem; color: ${day.precip_mm > 0 ? 'var(--teal)' : 'var(--muted)'}; font-weight: 600; margin-top: 2px;">
                     ${day.precip_mm > 0 ? `${day.precip_mm.toFixed(1)} mm` : '0 mm'}
                 </div>
             </div>
@@ -1116,7 +1071,7 @@ async function loadNowcastData() {
         // 5. Strategic Guidance Cards
         const advContainer = document.getElementById("strategicAdviceContainer");
         advContainer.innerHTML = data.strategic_advice.map(adv => `
-            <div class="ripple-box" style="margin-bottom: 10px; font-size: 0.86rem; color: #CBD5E1; line-height: 1.55;">
+            <div class="ripple-box" style="margin-bottom: 10px; font-size: 0.86rem; color: var(--ink); line-height: 1.55;">
                 ${adv}
             </div>
         `).join("");
@@ -1154,23 +1109,23 @@ function renderForecastChart(fc) {
     });
 
     const layout = {
-        template: "plotly_dark",
-        paper_bgcolor: "#111827",
-        plot_bgcolor: "#111827",
-        font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
-        height: 540,
+        template: "plotly_white",
+        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#ffffff",
+        font: { family: "Inter, -apple-system, sans-serif", size: 11, color: "#172f2b" },
+        height: 500,
         margin: { l: 85, r: 25, t: 20, b: 130 },
         yaxis: {
             title: { text: "Projected Daily Sales ($)", standoff: 18 },
             automargin: true,
             fixedrange: true,
-            gridcolor: "rgba(56, 189, 248, 0.10)",
+            gridcolor: "#e7ebe3",
             zeroline: false
         },
         xaxis: {
             fixedrange: true,
-            gridcolor: "rgba(255, 255, 255, 0.05)",
-            tickfont: { size: 11, color: "#CBD5E1" }
+            gridcolor: "#e7ebe3",
+            tickfont: { size: 11, color: "#64736c" }
         },
         legend: {
             orientation: "h",
@@ -1178,9 +1133,9 @@ function renderForecastChart(fc) {
             y: -0.26,
             xanchor: "center",
             x: 0.5,
-            font: { size: 10.5, color: "#E2E8F0" },
-            bgcolor: "rgba(17, 24, 39, 0.8)",
-            bordercolor: "rgba(255, 255, 255, 0.12)",
+            font: { size: 10.5, color: "#172f2b" },
+            bgcolor: "#ffffff",
+            bordercolor: "#dce2d8",
             borderwidth: 1
         }
     };

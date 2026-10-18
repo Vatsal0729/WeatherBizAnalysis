@@ -3,36 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather-Driven Business Intelligence Platform</title>
+    <title>Weather × Commerce · Executive Intelligence Platform</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Top Hero Bar -->
-        <header class="hero-container">
-            <div class="hero-top-row">
-                <h1 class="hero-title">Weather-Driven Business Intelligence</h1>
-                <div class="live-badge"><span class="live-dot"></span> Live Intelligence</div>
+    <!-- Top Editorial Masthead -->
+    <header class="masthead">
+        <a class="brand" href="/">W<span>×</span>B <small>THE WEATHER &amp; COMMERCE OBSERVATORY</small></a>
+        <span class="edition">PUBLIC DATA / RESEARCH EDITION</span>
+    </header>
+
+    <main>
+        <!-- Top Project Navigation -->
+        <nav class="section-nav" aria-label="Project navigation">
+            <a href="/" aria-current="page">Executive Intelligence Platform</a>
+            <a href="/eda">Academic EDA Presentation</a>
+            <a href="/notebook">Notebook Walkthrough &rarr;</a>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div>
+                <p class="eyebrow">WEATHER × COMMERCE</p>
+                <h1>How markets move<br>when the weather changes.</h1>
+                <p class="intro">Cross-cadence econometric analysis of urban mobility, digital commerce, and dining across four verified production datasets. Trace every number to its source, compare weather patterns, and examine defensible empirical evidence.</p>
             </div>
-            <p class="hero-subtitle">Live Weather APIs, Simulated Transactions & Econometric AI Insights.</p>
-        </header>
+            <div class="hero-aside">
+                <span class="status"><i></i> 4 VERIFIED PRODUCTION DATASETS</span>
+                <p id="coverage">NYC Taxi, Citi Bike, Online Retail &amp; Chipotle SEC</p>
+                <p class="small">Open-Meteo ERA5 Reanalysis &amp; NASA POWER.<br>Multi-cadence real-world business records.</p>
+            </div>
+        </section>
 
         <!-- Control Bar -->
         <div class="control-bar">
-            <div class="city-select-wrapper">
-                <label for="citySelect">City Market</label>
-                <select id="citySelect" class="custom-select">
-                    <option value="NYC">New York City (NYC)</option>
-                    <option value="ORD">Chicago (ORD)</option>
-                    <option value="SEA">Seattle (SEA)</option>
-                    <option value="PHX">Phoenix (PHX)</option>
-                </select>
-            </div>
             <div class="business-select-wrapper">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <label for="businessSelect" style="margin-bottom: 0;">Monitored Business</label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label for="businessSelect" style="margin-bottom: 0;">Select Monitored Business · Verified Production Dataset</label>
                     <span id="cadenceBadge" class="cadence-badge">Hourly Cadence</span>
                 </div>
                 <select id="businessSelect" class="custom-select business-dropdown">
@@ -46,43 +55,43 @@
             <div class="weather-ribbon-top">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span class="live-dot" id="weatherLiveDot"></span>
-                    <span style="font-weight: 700; color: #F8FAFC; font-size: 0.94rem;" id="weatherCityTitle">NYC Live Weather Intelligence</span>
-                    <span style="color: #38BDF8; font-weight: 600; font-size: 0.92rem;" id="weatherCondition">Clear Sky</span>
+                    <span style="font-weight: 700; color: var(--ink); font-size: 0.94rem;" id="weatherCityTitle">NYC Live Weather Intelligence</span>
+                    <span style="color: var(--teal); font-weight: 600; font-size: 0.92rem;" id="weatherCondition">Clear Sky</span>
                 </div>
                 <div>
-                    <a id="nasaWorldviewLink" href="https://worldview.earthdata.nasa.gov/" target="_blank" style="color: #00D2FF; text-decoration: none; font-size: 0.80rem; font-weight: 600; background: rgba(0, 210, 255, 0.12); border: 1px solid rgba(0, 210, 255, 0.35); padding: 5px 12px; border-radius: 6px;">
+                    <a id="nasaWorldviewLink" href="https://worldview.earthdata.nasa.gov/" target="_blank" class="text-link" style="border: 1px solid var(--line); padding: 5px 12px; border-radius: 6px; background: var(--panel);">
                         Inspect NASA Worldview Satellite Layer &rarr;
                     </a>
                 </div>
             </div>
             <div class="weather-ribbon-bottom">
                 <div class="weather-stats">
-                    <span>Ground Temp: <strong style="color: #FFFFFF;" id="wGroundTemp">--°C</strong></span>
-                    <span>NASA Satellite Temp: <strong style="color: #38BDF8;" id="wNasaTemp">--°C</strong></span>
-                    <span>Precipitation: <strong style="color: #FFFFFF;" id="wPrecip">-- mm/h</strong></span>
-                    <span>Humidity: <strong style="color: #FFFFFF;" id="wHumidity">--%</strong></span>
-                    <span>Wind: <strong style="color: #FFFFFF;" id="wWind">-- km/h</strong></span>
+                    <span>Ground Temp: <strong id="wGroundTemp">--°C</strong></span>
+                    <span>NASA Satellite Temp: <strong style="color: var(--teal);" id="wNasaTemp">--°C</strong></span>
+                    <span>Precipitation: <strong id="wPrecip">-- mm/h</strong></span>
+                    <span>Humidity: <strong id="wHumidity">--%</strong></span>
+                    <span>Wind: <strong id="wWind">-- km/h</strong></span>
                 </div>
-                <div style="font-size: 0.80rem; color: #38BDF8; font-weight: 500;" id="wConsensus">
+                <div style="font-size: 0.80rem; color: var(--teal); font-weight: 600;" id="wConsensus">
                     High Data Agreement (Ground + Satellite)
                 </div>
             </div>
         </section>
 
         <!-- Navigation Tabs -->
-        <nav class="tabs-navigation">
-            <button class="nav-tab active" data-tab="tab1">Weekly Operational Impact</button>
-            <button class="nav-tab" data-tab="tab2">Historical Trends & Seasonality</button>
-            <button class="nav-tab" data-tab="tab3">Business Interactions & Domino Chains</button>
-            <button class="nav-tab" data-tab="tab4">Live Scenario Simulator & AI Guidance</button>
-            <button class="nav-tab" data-tab="tab5">Data Sources & Processing</button>
+        <nav class="tabs-navigation" aria-label="Platform tabs">
+            <button class="nav-tab active" data-tab="tab1">01 / Operational Impact</button>
+            <button class="nav-tab" data-tab="tab2">02 / Historical Trends</button>
+            <button class="nav-tab" data-tab="tab3">03 / Domino Chains</button>
+            <button class="nav-tab" data-tab="tab4">04 / Live Scenario Simulator</button>
+            <button class="nav-tab" data-tab="tab5">05 / Data Sources &amp; Processing</button>
         </nav>
 
         <!-- ============================================================== -->
-        <!-- TAB 1: WEEKLY OPERATIONAL IMPACT -->
+        <!-- TAB 1: OPERATIONAL IMPACT -->
         <!-- ============================================================== -->
         <div id="tab1" class="tab-pane active">
-            <!-- 4 Metric Cards -->
+            <!-- 3 Metric Cards -->
             <div class="metrics-row">
                 <div class="metric-grid-card">
                     <div class="metric-label">Weather Sales Shift</div>
@@ -102,32 +111,32 @@
             </div>
 
             <!-- Daily Revenue & Rainfall Chart -->
-            <div class="chart-box">
-                <div class="chart-header">
+            <article class="panel">
+                <div class="panel-title">
                     <div>
-                        <div class="chart-title">Daily Revenue & Rainfall Timeline</div>
-                        <div class="chart-subtitle">Solid lines represent actual earned revenue. Dotted lines represent normal baseline sales on clear days.</div>
+                        <h3>Operational Revenue &amp; Rainfall Timeline</h3>
+                        <p>Solid lines indicate actual operational revenue; dashed lines indicate baseline expected sales on clear days.</p>
                     </div>
                 </div>
-                <div id="chart7d" style="width: 100%; height: 530px;"></div>
-            </div>
+                <div id="chart7d" style="width: 100%; height: 500px;"></div>
+            </article>
 
             <!-- Day in Review Section -->
-            <section style="margin-top: 26px;">
+            <section style="margin-top: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                     <div>
-                        <h3 style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;">Day in Review</h3>
-                        <p style="font-size: 0.82rem; color: var(--text-muted);">Inspect weather impacts on any specific day during the past week.</p>
+                        <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ink);">Day in Review</h3>
+                        <p style="font-size: 0.82rem; color: var(--muted);">Inspect weather impacts on any specific day during the observation window.</p>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <label for="daySelect" style="font-size: 0.82rem; font-weight: 600; color: #CBD5E1;">Choose Date:</label>
+                        <label for="daySelect" style="font-size: 0.82rem; font-weight: 600; color: var(--muted);">Choose Date:</label>
                         <select id="daySelect" class="custom-select" style="width: 240px; padding: 6px 10px;">
                             <!-- Populated dynamically -->
                         </select>
                     </div>
                 </div>
 
-                <div id="dayHeaderSummary" style="font-size: 0.86rem; color: #CBD5E1; margin-bottom: 14px;">
+                <div id="dayHeaderSummary" style="font-size: 0.86rem; color: var(--muted); margin-bottom: 14px;">
                     <!-- Date & weather summary -->
                 </div>
 
@@ -136,9 +145,9 @@
                 </div>
 
                 <!-- Hourly Analysis Collapsible Table -->
-                <details style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 16px; margin-top: 14px;">
-                    <summary style="font-weight: 700; font-size: 0.88rem; color: var(--primary); cursor: pointer;">Hourly Analysis for Selected Day</summary>
-                    <div class="custom-table-container" style="margin-top: 12px;">
+                <details class="panel" style="margin-top: 14px;">
+                    <summary style="font-weight: 700; font-size: 0.88rem; color: var(--teal); cursor: pointer;">Hourly Analysis for Selected Day</summary>
+                    <div class="table-wrap" style="margin-top: 12px;">
                         <table class="custom-table">
                             <thead>
                                 <tr>
@@ -168,11 +177,11 @@
         <div id="tab2" class="tab-pane">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                 <div>
-                    <h3 style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;" id="historicalTitle">Historical Trends & Seasonality</h3>
-                    <p style="font-size: 0.82rem; color: var(--text-muted);">Macro revenue trends and true weather elasticity across multi-year cycles.</p>
+                    <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ink);" id="historicalTitle">Historical Trends &amp; Seasonality</h3>
+                    <p style="font-size: 0.82rem; color: var(--muted);">Macro revenue trends and true weather elasticity across multi-year cycles.</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="horizonSelect" style="font-size: 0.82rem; font-weight: 600; color: #CBD5E1;">Timeline Range:</label>
+                    <label for="horizonSelect" style="font-size: 0.82rem; font-weight: 600; color: var(--muted);">Timeline Range:</label>
                     <select id="horizonSelect" class="custom-select" style="width: 220px; padding: 6px 10px;">
                         <option value="Last 3 Months (90 Days)">Last 3 Months (90 Days)</option>
                         <option value="Last 6 Months (180 Days)" selected>Last 6 Months (180 Days)</option>
@@ -182,20 +191,20 @@
             </div>
 
             <!-- Historical dual-axis Chart -->
-            <div class="chart-box">
-                <div id="chartHistorical" style="width: 100%; height: 550px;"></div>
-            </div>
+            <article class="panel">
+                <div id="chartHistorical" style="width: 100%; height: 520px;"></div>
+            </article>
 
             <!-- Econometric Comparison Table -->
             <section style="margin-top: 20px;">
-                <details open style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 14px 18px;">
-                    <summary style="font-weight: 700; font-size: 0.94rem; color: #F8FAFC; cursor: pointer; margin-bottom: 8px;">
-                        View All Metrics & Econometric Model Results (TWFE Regressions)
+                <details open class="panel">
+                    <summary style="font-weight: 700; font-size: 0.94rem; color: var(--ink); cursor: pointer; margin-bottom: 8px;">
+                        View All Metrics &amp; Econometric Model Results (TWFE Regressions)
                     </summary>
-                    <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px;">
+                    <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 12px;">
                         This table compares raw naive correlation against seasonality-adjusted econometric impact after removing calendar and city-level confounders.
                     </p>
-                    <div class="custom-table-container">
+                    <div class="table-wrap">
                         <table class="custom-table">
                             <thead>
                                 <tr>
@@ -224,44 +233,48 @@
         <!-- ============================================================== -->
         <div id="tab3" class="tab-pane">
             <div style="margin-bottom: 16px;">
-                <h3 style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;" id="dominoTitle">Business Interactions & Domino Chains</h3>
-                <p style="font-size: 0.82rem; color: var(--text-muted);">Quantifying higher-order multi-hop causal chains and indirect substitution flows across the commercial ecosystem.</p>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ink);" id="dominoTitle">Business Interactions &amp; Domino Chains</h3>
+                <p style="font-size: 0.82rem; color: var(--muted);">Quantifying higher-order multi-hop causal chains and indirect substitution flows across the commercial ecosystem.</p>
             </div>
 
             <!-- 1. Full Multi-Hop Domino Chain -->
             <div id="dominoChainContainer" class="domino-chain-container">
-                <div class="ripple-title" id="dominoChainTitle" style="margin-bottom: 14px;">Multi-Hop Domino Chain</div>
+                <div class="eyebrow" id="dominoChainTitle" style="margin-bottom: 14px;">MULTI-HOP DOMINO CHAIN</div>
                 <div id="dominoSteps">
                     <!-- Populated dynamically -->
                 </div>
             </div>
 
             <!-- 2. Non-Linear Tipping Point Box -->
-            <div id="tippingPointCard" class="ripple-box" style="border-left-color: var(--amber); margin-bottom: 22px;">
+            <div id="tippingPointCard" class="ripple-box" style="margin-bottom: 22px;">
                 <!-- Populated dynamically -->
             </div>
 
             <!-- 3. Per-Business Domino Cards -->
-            <h4 style="font-size: 1.05rem; font-weight: 700; color: #F8FAFC; margin-bottom: 6px;">Unique Business Domino Effects & Impact Analysis</h4>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">Granular causal chains and operational ripple effects customized for each selected business under current city weather.</p>
+            <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--ink); margin-bottom: 6px;">Unique Business Domino Effects &amp; Impact Analysis</h4>
+            <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Granular causal chains and operational ripple effects customized for each selected business under current city weather.</p>
             
             <div id="bizDominosGrid" class="biz-domino-grid">
                 <!-- Populated dynamically -->
             </div>
 
             <!-- 4. Cross-Channel Demand Shifts -->
-            <h4 style="font-size: 1.05rem; font-weight: 700; color: #F8FAFC; margin-top: 20px; margin-bottom: 6px;">Cross-Channel Demand Shifts</h4>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">How weather-driven demand moves between in-person, indoor and digital businesses.</p>
+            <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--ink); margin-top: 20px; margin-bottom: 6px;">Cross-Channel Demand Shifts</h4>
+            <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">How weather-driven demand moves between in-person, indoor and digital businesses.</p>
             <div id="substitutionLinksContainer">
                 <!-- Populated dynamically -->
             </div>
 
             <!-- 5. Past 30 Days Net Shift Chart -->
-            <h4 style="font-size: 1.05rem; font-weight: 700; color: #F8FAFC; margin-top: 24px; margin-bottom: 6px;">Past 30 Days Net Weather Sales Shift ($ USD)</h4>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">Tracking how weather shifted dollar earnings above or below baseline across your businesses.</p>
-            <div class="chart-box">
-                <div id="chart30d" style="width: 100%; height: 500px;"></div>
-            </div>
+            <article class="panel" style="margin-top: 24px;">
+                <div class="panel-title">
+                    <div>
+                        <h3>Past 30 Days Net Weather Sales Shift ($ USD)</h3>
+                        <p>Tracking how weather shifted dollar earnings above or below baseline across your businesses.</p>
+                    </div>
+                </div>
+                <div id="chart30d" style="width: 100%; height: 480px;"></div>
+            </article>
         </div>
 
         <!-- ============================================================== -->
@@ -269,14 +282,14 @@
         <!-- ============================================================== -->
         <div id="tab4" class="tab-pane">
             <div style="margin-bottom: 14px;">
-                <h3 style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;" id="nowcastTitle">Live Weather Intelligence & Business Impact Forecast</h3>
-                <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">Empirical econometric shock simulations across real-world enterprise and municipal datasets under live meteorological conditions.</p>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ink);" id="nowcastTitle">Live Weather Intelligence &amp; Business Impact Forecast</h3>
+                <p style="font-size: 0.82rem; color: var(--muted); margin-top: 4px;">Empirical econometric shock simulations across real-world enterprise and municipal datasets under live meteorological conditions.</p>
             </div>
 
             <!-- Live Nowcast Conditions Banner -->
-            <div id="nowcastBanner" style="background: rgba(17, 24, 39, 0.95); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <article class="panel" id="nowcastBanner" style="margin-bottom: 16px; padding: 16px 20px;">
                 <!-- Populated dynamically -->
-            </div>
+            </article>
 
             <!-- 4 Real Business Shock Cards -->
             <div id="sectorPredictionsGrid" class="sector-grid">
@@ -284,15 +297,15 @@
             </div>
 
             <!-- What-If Simulator Expander -->
-            <details style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;">
-                <summary style="font-weight: 700; font-size: 0.92rem; color: var(--primary); cursor: pointer; margin-bottom: 12px;">
+            <details class="panel" style="margin-bottom: 24px;">
+                <summary style="font-weight: 700; font-size: 0.92rem; color: var(--teal); cursor: pointer; margin-bottom: 12px;">
                     Customize What-If Scenarios (Optional Simulation Controls)
                 </summary>
-                <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">Change day, hour, or weather intensity to test hypothetical conditions against the live baseline.</p>
+                <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Change day, hour, or weather intensity to test hypothetical conditions against the live baseline.</p>
                 
                 <div class="slider-row">
                     <div class="slider-group">
-                        <label for="simDay">Day of Week: <span id="simDayVal" style="color:#38BDF8; font-weight:700;">Monday</span></label>
+                        <label for="simDay">Day of Week: <span id="simDayVal" style="color:var(--teal); font-weight:700;">Monday</span></label>
                         <select id="simDay" class="custom-select">
                             <option value="0">Monday</option>
                             <option value="1">Tuesday</option>
@@ -304,39 +317,39 @@
                         </select>
                     </div>
                     <div class="slider-group">
-                        <label for="simHour">Hour of Day: <span id="simHourVal" style="color:#38BDF8; font-weight:700;">12:00</span></label>
+                        <label for="simHour">Hour of Day: <span id="simHourVal" style="color:var(--teal); font-weight:700;">12:00</span></label>
                         <input type="range" id="simHour" class="custom-range" min="0" max="23" value="12">
                     </div>
                     <div class="slider-group">
-                        <label for="simRain">Rainfall (mm/hr): <span id="simRainVal" style="color:#38BDF8; font-weight:700;">0.0 mm</span></label>
+                        <label for="simRain">Rainfall (mm/hr): <span id="simRainVal" style="color:var(--teal); font-weight:700;">0.0 mm</span></label>
                         <input type="range" id="simRain" class="custom-range" min="0" max="25" step="0.5" value="0">
                     </div>
                     <div class="slider-group">
-                        <label for="simTempAnom">Temp Anomaly vs Season (°C): <span id="simTempAnomVal" style="color:#38BDF8; font-weight:700;">0.0°C</span></label>
+                        <label for="simTempAnom">Temp Anomaly vs Season (°C): <span id="simTempAnomVal" style="color:var(--teal); font-weight:700;">0.0°C</span></label>
                         <input type="range" id="simTempAnom" class="custom-range" min="-15" max="15" step="0.5" value="0">
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 10px;">
-                    <button id="btnApplySim" class="btn-primary">Apply Custom Parameters</button>
+                    <button id="btnApplySim" class="primary">Apply Custom Parameters</button>
                     <button id="btnResetLive" class="btn-secondary">Reset to Direct Live Conditions</button>
                 </div>
             </details>
 
             <!-- 7-Day Multi-Source Forecast -->
-            <h4 style="font-size: 1.05rem; font-weight: 700; color: #F8FAFC; margin-bottom: 6px;">7-Day Revenue Forecast & Weather Outlook</h4>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">Projected daily revenue across your business portfolio based on multi-source weather forecasts.</p>
+            <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--ink); margin-bottom: 6px;">7-Day Revenue Forecast &amp; Weather Outlook</h4>
+            <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Projected daily revenue across your business portfolio based on multi-source weather forecasts.</p>
 
             <div id="forecastStrip" class="forecast-strip">
                 <!-- 7 weather days cards -->
             </div>
 
-            <div class="chart-box">
-                <div id="chartForecast" style="width: 100%; height: 540px;"></div>
-            </div>
+            <article class="panel">
+                <div id="chartForecast" style="width: 100%; height: 500px;"></div>
+            </article>
 
             <!-- Strategic Guidance Cards -->
-            <h4 style="font-size: 1.05rem; font-weight: 700; color: #F8FAFC; margin-top: 20px; margin-bottom: 12px;">Strategic Operational Guidance</h4>
+            <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--ink); margin-top: 20px; margin-bottom: 12px;">Strategic Operational Guidance</h4>
             <div id="strategicAdviceContainer">
                 <!-- Populated dynamically -->
             </div>
@@ -347,72 +360,85 @@
         <!-- ============================================================== -->
         <div id="tab5" class="tab-pane">
             <div style="margin-bottom: 18px;">
-                <h3 style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;">Data Sources & Processing</h3>
-                <p style="font-size: 0.82rem; color: var(--text-muted);">Multi-source synchronization architecture, spatial alignment, and feature engineering.</p>
+                <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ink);">Data Sources &amp; Processing</h3>
+                <p style="font-size: 0.82rem; color: var(--muted);">Multi-source synchronization architecture, spatial alignment, and feature engineering.</p>
             </div>
 
             <!-- 3 Architecture Cards -->
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px;">
-                <div class="sector-grid-card">
-                    <div class="sector-title">1. Time & Location Alignment</div>
-                    <div style="font-size: 0.82rem; color: #CBD5E1; line-height: 1.55;">
-                        • <strong>4 Cities:</strong> Data aligned across New York, Chicago, Los Angeles, and Phoenix.<br/>
+                <div class="panel">
+                    <p class="eyebrow">01 / TIME &amp; LOCATION</p>
+                    <div class="sector-title">Multi-Market Spatial Alignment</div>
+                    <div style="font-size: 0.82rem; color: var(--muted); line-height: 1.55;">
+                        • <strong>4 Cities:</strong> Aligned across New York, Chicago, Seattle, and Phoenix.<br/>
                         • <strong>Time Accuracy:</strong> Accounts for IANA time zones and daylight saving changes without dropped intervals.<br/>
                         • <strong>Consistent Timeline:</strong> Aligns weather telemetry and business transactions into a unified index.
                     </div>
                 </div>
-                <div class="sector-grid-card">
-                    <div class="sector-title">2. Data Integration & Preparation</div>
-                    <div style="font-size: 0.82rem; color: #CBD5E1; line-height: 1.55;">
-                        • <strong>Data Combined:</strong> Merged <strong>69,106 weather records</strong> and <strong>279,249 point-of-sale events</strong>.<br/>
-                        • <strong>Missing Data:</strong> Fills sensor dropouts using cubic spline interpolation and forward-fill windows.<br/>
-                        • <strong>Hourly Summaries:</strong> Converts 15-minute transactional records into volume-weighted hourly totals.
+                <div class="panel">
+                    <p class="eyebrow">02 / INTEGRATION</p>
+                    <div class="sector-title">Data Preparation &amp; Cleaning</div>
+                    <div style="font-size: 0.82rem; color: var(--muted); line-height: 1.55;">
+                        • <strong>Data Combined:</strong> Over <strong>70,000 weather records</strong> and <strong>5.4M micro-transactions</strong>.<br/>
+                        • <strong>Missing Data:</strong> Excludes incomplete records; preserves extreme values without blanket deletion.<br/>
+                        • <strong>Multi-Cadence:</strong> Supports hourly, daily, and quarterly corporate reporting cadences.
                     </div>
                 </div>
-                <div class="sector-grid-card">
-                    <div class="sector-title">3. Weather & Business Metrics</div>
-                    <div style="font-size: 0.82rem; color: #CBD5E1; line-height: 1.55;">
+                <div class="panel">
+                    <p class="eyebrow">03 / ECONOMETRICS</p>
+                    <div class="sector-title">Weather &amp; Business Metrics</div>
+                    <div style="font-size: 0.82rem; color: var(--muted); line-height: 1.55;">
                         • <strong>Temperature Anomaly:</strong> Measures deviations from 30-day rolling seasonal historical baselines.<br/>
-                        • <strong>Heating & Cooling Demand:</strong> Dynamic CDD/HDD metrics estimating HVAC and energy grid loads.<br/>
-                        • <strong>21 Business Metrics:</strong> Tracks operational performance across 21 sectors in 4 climate zones.
+                        • <strong>HAC Robust Errors:</strong> Newey-West standard errors robust to multi-period serial autocorrelation.<br/>
+                        • <strong>Empirical Elasticities:</strong> Validated across 4 real production datasets.
                     </div>
                 </div>
             </div>
 
             <!-- Live Data Pipeline Inspector Table -->
-            <h4 style="font-size: 1.05rem; font-weight: 700; color: #F8FAFC; margin-bottom: 6px;">Live Data Pipeline Inspector</h4>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">Synchronized weather and business records across operational data streams (indexed 1 through N).</p>
-
-            <div class="custom-table-container">
-                <table class="custom-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Time</th>
-                            <th>City</th>
-                            <th>Temp (°C)</th>
-                            <th>Temp Anom (°C)</th>
-                            <th>Rain (mm)</th>
-                            <th>Food Orders</th>
-                            <th>Price Surge</th>
-                            <th>Bike Trips</th>
-                            <th>Rideshare Trips</th>
-                            <th>Dine-In Diners</th>
-                            <th>Mall Footfall</th>
-                            <th>Grid Load</th>
-                            <th>Freight Delay</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pipelineTableBody">
-                        <!-- Populated dynamically -->
-                    </tbody>
-                </table>
-            </div>
+            <article class="panel">
+                <div class="panel-title">
+                    <div>
+                        <h3>Live Data Pipeline Inspector</h3>
+                        <p>Synchronized weather and business records across operational data streams.</p>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Time</th>
+                                <th>City</th>
+                                <th>Temp (°C)</th>
+                                <th>Temp Anom (°C)</th>
+                                <th>Rain (mm)</th>
+                                <th>Food Orders</th>
+                                <th>Price Surge</th>
+                                <th>Bike Trips</th>
+                                <th>Rideshare Trips</th>
+                                <th>Dine-In Diners</th>
+                                <th>Mall Footfall</th>
+                                <th>Grid Load</th>
+                                <th>Freight Delay</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pipelineTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </article>
         </div>
+    </main>
 
-    </div>
+    <!-- Observatory Footer -->
+    <footer>
+        <span>WEATHER × COMMERCE / EXECUTIVE PLATFORM</span>
+        <span id="builtAt">Verified Snapshot 2026</span>
+        <span>Association ≠ Causation.</span>
+    </footer>
 
-    <!-- ============================================================== -->
     <!-- App JavaScript Logic -->
     <script src="/static/js/app.js"></script>
 </body>

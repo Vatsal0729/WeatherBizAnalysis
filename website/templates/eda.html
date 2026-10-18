@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Academic EDA Presentation · Weather × Commerce</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/eda.css">
+</head>
+<body>
+  <script src="/static/js/eda.js" defer></script>
+  <header class="masthead">
+    <a class="brand" href="/">W<span>×</span>B <small>THE WEATHER &amp; COMMERCE OBSERVATORY</small></a>
+    <span class="edition">EXPLORATORY DATA ANALYSIS EDITION</span>
+  </header>
+  <main>
+    <nav class="section-nav" aria-label="Project navigation">
+      <a href="/">Executive Platform</a>
+      <a href="/eda" aria-current="page">Academic EDA Presentation</a>
+      <a href="/notebook">Notebook Walkthrough &rarr;</a>
+    </nav>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow">THE RESEARCH WALKTHROUGH</p>
+        <h1>From transaction records<br>to defensible insights.</h1>
+        <p class="intro">How does commercial business demand vary with weather, seasonality, and day of the week? An EDA-first presentation of empirical evidence across four production datasets—not a causal speculation.</p>
+      </div>
+      <aside class="hero-aside">
+        <p>4 Verified Sectors.<br>Multi-Cadence Telemetry.</p>
+        <p class="small">NYC Yellow Taxi (hourly), Citi Bike (daily), Online Retail (daily), and Chipotle SEC (quarterly). Open-Meteo ERA5 Reanalysis &amp; NASA POWER.</p>
+      </aside>
+    </section>
+
+    <nav class="section-nav" aria-label="EDA chapters">
+      <a href="#collection">01 Collection</a>
+      <a href="#cleaning">02 Cleaning</a>
+      <a href="#distribution">03 Distributions</a>
+      <a href="#relationships">04 Relationships</a>
+      <a href="#time">05 Time patterns</a>
+      <a href="#conclusions">06 Interpretation</a>
+      <a href="#correlation-math">07 Correlation &amp; math</a>
+    </nav>
+
+    <form class="panel eda-select" action="/eda" method="get">
+      <label>Production series
+        <select id="series" name="series">
+          {% for key, mode in modes.items() %}
+          <option value="{{ key }}" {% if key == series %}selected{% endif %}>{{ mode.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Year
+        <select name="year">
+          <option value="all">All years</option>
+          {% for value in years %}
+          <option value="{{ value }}" {% if value == selected_year %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Season
+        <select name="season">
+          <option value="all">All seasons</option>
+          {% for value in seasons %}
+          <option value="{{ value }}" {% if value == selected_season %}selected{% endif %}>{{ season_labels.get(value, value|title) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Day type
+        <select name="day_type">
+          <option value="all">All days</option>
+          <option value="weekday" {% if selected_day_type == 'weekday' %}selected{% endif %}>Weekdays</option>
+          <option value="weekend" {% if selected_day_type == 'weekend' %}selected{% endif %}>Weekends</option>
+        </select>
+      </label>
+      <button class="primary" type="submit">Refresh data</button>
+      <p class="note">All statistics and charts below are recalculated live from verified production Parquet snapshots. Displaying {{ rows }} of {{ source_rows }} observations for {{ name }} · {{ start }} to {{ end }}.</p>
+      {% if filter_warning %}
+      <p class="eda-filter-warning">{{ filter_warning }}</p>
+      {% endif %}
+    </form>
+
+    <!-- 01 Collection -->
+    <section id="collection" class="section">
+      <p class="eyebrow">01 / COLLECTION &amp; STRUCTURE · CO 1</p>
+      <h2>Understand the unit of observation.</h2>
+      <article class="panel">
+        <p>Operational dataset: continuous business activity matched with local meteorological readings. NYC Taxi measures volume per hour; Citi Bike and Retail measure daily sales; Chipotle measures quarterly GAAP financials. No record follows individual customers.</p>
+        <div class="metrics">
+          <div class="metric"><p>Selected rows</p><strong>{{ rows }}</strong></div>
+          <div class="metric"><p>All dataset rows</p><strong>{{ source_rows }}</strong></div>
+          <div class="metric"><p>Unit of measure</p><strong>{{ unit }}</strong></div>
+          <div class="metric"><p>Time cadence</p><strong>{{ modes[series].cadence|title }}</strong></div>
+        </div>
+        <p>Verified Sources: NYC Taxi &amp; Limousine Commission (TLC OpenData), Citi Bike NYC Public S3, UCI Machine Learning E-Commerce Repository, U.S. SEC EDGAR Corporate 10-Q Filings, and Open-Meteo ERA5 / NASA POWER Reanalysis.</p>
+        <a class="text-link" href="/api/eda-audit" target="_blank">Inspect data provenance manifest &amp; row accounting &rarr;</a>
+        <p class="note">Feature dictionary: count = trips, rides, orders, or quarterly revenue; rain_mm = precipitation depth (mm); temperature_c = ambient dry-bulb temperature (°C); snow_cm = snowfall depth (cm); wind_kmh = sustained wind speed (km/h).</p>
+      </article>
+    </section>
+
+    <!-- 02 Cleaning -->
+    <section id="cleaning" class="section">
+      <p class="eyebrow">02 / PREPROCESSING &amp; AUDITING · CO 2</p>
+      <h2>Keep data cleaning decisions completely visible.</h2>
+      <article class="panel">
+        <ol>
+          <li>Ingest raw transaction-level payloads without altering source schemas; validate datetimes and IANA local timezones.</li>
+          <li>Exclude records with negative values, zero-duration rides (dock testing false starts), and duplicate primary keys.</li>
+          <li>For online retail, separate credit invoice cancellations (invoice 'C' series) into a returns ledger to avoid distorting gross demand.</li>
+          <li>Verify SEC corporate quarterly statements against 10-K audited annual balance sheets, resolving retrospective restatements.</li>
+          <li>Spatial &amp; temporal alignment: merge weather measures on exact hourly and daily intervals without synthetic interpolation.</li>
+        </ol>
+        <p class="note">No blanket outlier deletion is applied. Extreme revenue spikes and heavy downpours are preserved as legitimate operational evidence.</p>
+      </article>
+      <article class="panel">
+        <div class="panel-title">
+          <div>
+            <h3>Raw-to-Published Accounting Audit</h3>
+            <p>Verification table tracing raw transactional records to cleaned analytical time series.</p>
+          </div>
+          <a class="text-link" href="/api/eda-audit" target="_blank">Download Audit JSON &rarr;</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Data Source</th><th>Raw Input</th><th>Published Output</th><th>Excluded</th><th>Transformation Rule</th></tr>
+            </thead>
+            <tbody>
+              {% for r in audit.rows %}
+              <tr>
+                <td>{{ r.source }}</td>
+                <td>{{ '{:,}'.format(r.raw) }} {{ r.raw_unit }}</td>
+                <td>{{ '{:,}'.format(r.clean) }} {{ r.clean_unit }}</td>
+                <td>{{ '{:,}'.format(r.excluded) }}</td>
+                <td>{{ r.action }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">{{ audit.note }} The audit documents transparent data pipeline rules, not claims that excluded records were erroneous.</p>
+      </article>
+    </section>
+
+    <!-- 03 Distributions -->
+    <section id="distribution" class="section">
+      <p class="eyebrow">03 / DESCRIPTIVE STATISTICS · CO 3</p>
+      <h2>Examine spread, skewness, and extreme values.</h2>
+      <article class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Feature</th><th>N</th><th>Missing</th><th>Mean</th><th>Median</th><th>SD</th><th>IQR</th><th>Skewness</th><th>Excess Kurtosis</th><th>IQR Outliers</th></tr>
+            </thead>
+            <tbody>
+              {% for r in stats %}
+              <tr>
+                <td><strong>{{ r.feature }}</strong></td>
+                <td>{{ r.n }}</td>
+                <td>{{ r.missing }}</td>
+                <td>{{ '%.2f'|format(r.mean) }}</td>
+                <td>{{ '%.2f'|format(r.median) }}</td>
+                <td>{{ '%.2f'|format(r.std) }}</td>
+                <td>{{ '%.2f'|format(r.iqr) }}</td>
+                <td>{{ '%.2f'|format(r.skew) }}</td>
+                <td>{{ '%.2f'|format(r.kurtosis) }}</td>
+                <td>{{ r.flagged }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">SD is unbiased sample standard deviation. Outliers represent values exceeding Tukey fences: Q1 − 1.5×IQR or Q3 + 1.5×IQR; they are retained as genuine extreme market events.</p>
+      </article>
+
+      {% for hist in histograms %}
+      <article class="panel">
+        <h3>{{ hist.name }} · Frequency Distribution</h3>
+        <p class="note">12 equal-width bins; bar width indicates observed interval frequency.</p>
+        <svg viewBox="0 0 850 390" role="img" aria-label="Histogram of {{ hist.name }}">
+          <title>Distribution of {{ hist.name }}</title>
+          {% for b in hist.bars %}
+          <text x="0" y="{{ 25 + loop.index0 * 30 }}">{{ b.label }}</text>
+          <rect x="160" y="{{ 10 + loop.index0 * 30 }}" width="{{ b.width }}" height="20"/>
+          <text x="{{ 170 + b.width }}" y="{{ 25 + loop.index0 * 30 }}">{{ b.value }}</text>
+          {% endfor %}
+        </svg>
+      </article>
+      {% endfor %}
+    </section>
+
+    <!-- 04 Relationships -->
+    <section id="relationships" class="section">
+      <p class="eyebrow">04 / BIVARIATE &amp; MULTIVARIATE EXPLORATION · CO 3</p>
+      <h2>Compare associations across meteorological thresholds.</h2>
+      <article class="panel">
+        <h3>Activity by Precipitation Category</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Rain Intensity (mm)</th><th>Observed Intervals</th><th>Mean Volume</th><th>Median Volume</th></tr>
+            </thead>
+            <tbody>
+              {% for r in groups %}
+              <tr>
+                <td><strong>{{ r.rain_group }}</strong></td>
+                <td>{{ r['size'] }}</td>
+                <td>{{ '%.1f'|format(r['mean']) }}</td>
+                <td>{{ '%.1f'|format(r['median']) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Stratified rainfall categories reveal non-linear tipping points. Unequal bin frequencies reflect true weather rarity.</p>
+      </article>
+
+      <article class="panel">
+        <h3>Spearman Rank-Correlation Matrix (Monotonic Association)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Feature</th>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+              {% for c in columns %}
+              <tr>
+                <th>{{ c }}</th>
+                {% for other in columns %}
+                <td>{{ '%.2f'|format(corr.loc[c, other]) }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Spearman ρ evaluates monotonic relationships using fractional ranks, handling tied dry intervals appropriately.</p>
+      </article>
+    </section>
+
+    <!-- 05 Time patterns -->
+    <section id="time" class="section">
+      <p class="eyebrow">05 / TEMPORAL EXPLORATION · CO 4</p>
+      <h2>Separate calendar patterns from weather effects.</h2>
+      <article class="panel">
+        <h3>Mean Activity by Day of Week</h3>
+        <svg viewBox="0 0 850 240" role="img" aria-label="Mean activity by weekday">
+          {% for b in weekdays %}
+          <text x="0" y="{{ 25 + loop.index0 * 30 }}">{{ b.label }}</text>
+          <rect x="80" y="{{ 10 + loop.index0 * 30 }}" width="{{ b.width }}" height="20"/>
+          <text x="{{ 90 + b.width }}" y="{{ 25 + loop.index0 * 30 }}">{{ '%.0f'|format(b.value) }} (n={{ b.n }})</text>
+          {% endfor %}
+        </svg>
+        <p class="note">Strong day-of-week seasonality (e.g. weekend micromobility vs. weekday commute) must be controlled when isolating weather elasticities.</p>
+      </article>
+
+      <article class="panel">
+        <h3>Monthly / Longitudinal Trend</h3>
+        <svg viewBox="0 0 760 270" role="img" aria-label="Monthly average volume over time">
+          <text x="0" y="35">{{ '%.0f'|format(trend_max) }}</text>
+          <text x="30" y="225">0</text>
+          <line x1="60" y1="220" x2="680" y2="220"/>
+          <polyline points="{{ points }}"/>
+          <text x="60" y="250">{{ trend_start }}</text>
+          <text x="620" y="250">{{ trend_end }}</text>
+        </svg>
+        <p class="note">Longitudinal averages demonstrate macro trajectory without synthetic imputation.</p>
+      </article>
+    </section>
+
+    <!-- 06 Interpretation -->
+    <section id="conclusions" class="section">
+      <p class="eyebrow">06 / PRESENTATION TAKEAWAYS</p>
+      <h2>Present conclusions supported by empirical evidence.</h2>
+      <article class="panel">
+        <h3>Recommended Presentation Sequence</h3>
+        <ol>
+          <li>State the data source, geographic coverage, time horizon, and operational unit of measure.</li>
+          <li>Explain preprocessing exclusions and data accounting transparently.</li>
+          <li>Contrast mean against median to highlight skewness and extreme tail events.</li>
+          <li>Compare precipitation bins alongside day-of-week baselines.</li>
+          <li>Formulate defensible empirical elasticities; distinguish correlation from causation.</li>
+        </ol>
+        <a href="/" class="text-link">Transition to the Executive Intelligence Platform &rarr;</a>
+      </article>
+    </section>
+
+    <!-- 07 Correlation & Math -->
+    {% include 'eda_math.html' %}
+
+  </main>
+  <footer>
+    <span>WEATHER × COMMERCE / EDA</span>
+    <span>Production Snapshot 2026</span>
+    <span>Association ≠ Causation.</span>
+  </footer>
+</body>
+</html>

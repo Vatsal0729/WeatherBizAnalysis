@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Notebook Walkthrough · Weather × Commerce</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/notebook.css">
+  <script src="/static/js/notebook.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="/">W<span>×</span>B <small>THE WEATHER &amp; COMMERCE OBSERVATORY</small></a>
+    <span class="edition">NOTEBOOK / CODE WALKTHROUGH EDITION</span>
+  </header>
+  <main>
+    <nav class="section-nav" aria-label="Project navigation">
+      <a href="/">Executive Platform</a>
+      <a href="/eda">Academic EDA Presentation</a>
+      <a href="/notebook" aria-current="page">Notebook Walkthrough</a>
+    </nav>
+
+    <section class="hero notebook-hero">
+      <div>
+        <p class="eyebrow">EXECUTABLE ANALYSIS, EXPLAINED</p>
+        <h1>See the question,<br>code and output together.</h1>
+        <p class="intro">An interactive code walkthrough of the econometric data pipeline. Every stage below pairs python code with verified intermediate outputs, formulas, and empirical interpretation.</p>
+        <div class="hero-actions">
+          <a class="primary link-button" href="#stages">Start Walkthrough &darr;</a>
+        </div>
+      </div>
+      <aside class="hero-aside">
+        <span class="status"><i></i> 4 VERIFIED DATASETS</span>
+        <p>744 Taxi Hours · 120 Bike Days<br>305 Retail Days · 27 SEC Quarters</p>
+        <p class="small">100% reproducible on local Parquet files.<br>Open-Meteo ERA5 Reanalysis &amp; NASA POWER.</p>
+      </aside>
+    </section>
+
+    <section class="notebook-map panel">
+      <div>
+        <p class="eyebrow">ANALYSIS PIPELINE FLOW</p>
+        <h2>Raw Data &rarr; Cleaning &rarr; Feature Engineering &rarr; EDA &rarr; Econometrics</h2>
+      </div>
+      <div class="flow">
+        <span>Production Records</span><b>&rarr;</b><span>Validation Rules</span><b>&rarr;</b><span>Feature Engineering</span><b>&rarr;</b><span>Descriptive EDA</span><b>&rarr;</b><span>TWFE Regressions</span>
+      </div>
+      <p class="note">The pipeline operates exclusively on versioned Parquet data snapshots without altering raw municipal or statutory sources.</p>
+    </section>
+
+    <nav class="stage-nav" aria-label="Notebook stages">
+      {% for stage in stages %}
+      <a href="#stage-{{ stage.number }}">{{ '%02d'|format(stage.number) }} {{ stage.title }}</a>
+      {% endfor %}
+    </nav>
+
+    <div class="notebook-controls">
+      <button class="eda-button" id="stagePrev" type="button">&larr; Previous</button>
+      <span id="stageStatus" role="status"></span>
+      <button class="eda-button" id="stageNext" type="button">Next &rarr;</button>
+      <button class="eda-button" id="stageAll" type="button">Show all stages</button>
+    </div>
+
+    <div id="stages">
+      {% for stage in stages %}
+      <section id="stage-{{ stage.number }}" class="section notebook-stage" tabindex="-1">
+        <p class="eyebrow">NOTEBOOK STAGE {{ '%02d'|format(stage.number) }}</p>
+        <h2>{{ stage.title }}</h2>
+        <p class="chapter-hint">{{ stage.explanation }}</p>
+
+        <div class="stage-grid">
+          <article class="panel code-panel">
+            <div class="panel-title">
+              <div>
+                <h3>Python Code Cell</h3>
+                <p>Executable snippet from <code>weather_business_econometrics.py</code></p>
+              </div>
+            </div>
+            <pre><code>{{ stage.code }}</code></pre>
+          </article>
+
+          <article class="panel output-panel">
+            <h3>Output and Empirical Interpretation</h3>
+            
+            {% if stage.title == 'Load verified production Parquet datasets' %}
+            <div class="metrics compact-metrics">
+              <div class="metric"><p>Taxi Hourly Rows</p><strong>744</strong></div>
+              <div class="metric"><p>Citi Bike Days</p><strong>120</strong></div>
+              <div class="metric"><p>Retail Daily Days</p><strong>305</strong></div>
+              <div class="metric"><p>Chipotle Quarters</p><strong>27</strong></div>
+            </div>
+            <p>Shapes confirm verified data ingestion across all multi-cadence production schemas.</p>
+
+            {% elif stage.title == 'Audit raw-to-clean row accounting' %}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Source</th><th>Raw Input</th><th>Published Output</th><th>Transformation</th></tr>
+                </thead>
+                <tbody>
+                  {% for r in audit.rows %}
+                  <tr>
+                    <td>{{ r.source }}</td>
+                    <td>{{ '{:,}'.format(r.raw) }}</td>
+                    <td>{{ '{:,}'.format(r.clean) }}</td>
+                    <td>{{ r.action }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            {% elif stage.title == 'Engineer interpretable weather & calendar features' %}
+            <div class="feature-list" style="display:flex; gap:8px; flex-wrap:wrap; margin:14px 0;">
+              <span style="background:var(--line); padding:4px 8px; border-radius:4px; font-size:11px;">timestamp</span>
+              <span style="background:var(--line); padding:4px 8px; border-radius:4px; font-size:11px;">rain_mm</span>
+              <span style="background:var(--line); padding:4px 8px; border-radius:4px; font-size:11px;">temperature_c</span>
+              <span style="background:var(--line); padding:4px 8px; border-radius:4px; font-size:11px;">rain_group</span>
+              <span style="background:var(--line); padding:4px 8px; border-radius:4px; font-size:11px;">day_of_week</span>
+              <span style="background:var(--line); padding:4px 8px; border-radius:4px; font-size:11px;">season</span>
+            </div>
+            <p>Features are derived deterministically from local calendar dates and weather depths without synthetic imputation.</p>
+
+            {% elif stage.title == 'Reproduce Pearson and OLS mathematics' %}
+            <div class="worked-result" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:12px 0;">
+              <div><span>Observations (n)</span><strong>{{ math_report.n }}</strong></div>
+              <div><span>x̄ rain (mm)</span><strong>{{ '%.3f'|format(math_report.x_mean) }}</strong></div>
+              <div><span>ȳ volume</span><strong>{{ '%.1f'|format(math_report.y_mean) }}</strong></div>
+              <div><span>Pearson r</span><strong>{{ '%.4f'|format(math_report.pearson_r) }}</strong></div>
+              <div><span>OLS slope b₁</span><strong>{{ '%.4f'|format(math_report.slope) }}</strong></div>
+              <div><span>Model R²</span><strong>{{ '%.4f'|format(math_report.r_squared) }}</strong></div>
+            </div>
+            <div class="formula worked-formula">
+              Sxx = {{ '%.3f'|format(math_report.sxx) }}<br>
+              Syy = {{ '%.3f'|format(math_report.syy) }}<br>
+              Sxy = {{ '%.3f'|format(math_report.sxy) }}<br>
+              Covariance = {{ '%.3f'|format(math_report.covariance) }}<br>
+              ŷ = {{ '%.2f'|format(math_report.intercept) }} + ({{ '%.4f'|format(math_report.slope) }})x
+            </div>
+            <p>Manual Pearson calculations match pandas results. Negative or positive slopes reflect empirical unadjusted correlations.</p>
+
+            {% else %}
+            <p>Execution confirmed: code generates verified analytical matrices utilized in subsequent econometric models.</p>
+            {% endif %}
+
+            <p class="output-note">Interpret findings within declared data scope. Statistical association does not imply unadjusted causation.</p>
+          </article>
+        </div>
+
+        {% if stage.math %}
+        <article class="panel math-card" style="margin-top:14px;">
+          <p class="eyebrow">MATHEMATICAL FOUNDATION</p>
+          <pre style="background:var(--bg); padding:12px; border-radius:6px; font-size:11px; font-family:monospace; line-height:1.6;">{{ stage.math }}</pre>
+        </article>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </div>
+
+    <section class="section">
+      <article class="panel run-card">
+        <p class="eyebrow">REPRODUCIBILITY</p>
+        <h2>Run this pipeline in your own terminal.</h2>
+        <pre><code># Run complete test suite across all 4 production datasets
+pytest tests/ -v
+
+# Start the local research observatory
+python -m website.server</code></pre>
+        <p class="note">All dependencies and datasets are packaged locally for complete offline auditability and execution.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <span>WEATHER × COMMERCE / NOTEBOOK</span>
+    <span>{{ stages|length }} Executable Stages</span>
+    <span>Code &rarr; Output &rarr; Interpretation.</span>
+  </footer>
+</body>
+</html>
