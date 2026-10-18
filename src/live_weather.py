@@ -365,18 +365,29 @@ def generate_live_weather_ai_forecast(
             rain_val = day_info["precip_mm"]
             temp_val = day_info["temp_avg"]
 
-            rain_mult = 1.0 + (rain_val * cfg.get("rain_elasticity", 0.0))
+            # Calculate seasonal baseline expectation for the forecast month
+            month_idx = dt.month - 1
+            monthly_normals = [2.0, 3.5, 7.5, 13.0, 18.5, 23.5, 26.0, 25.0, 21.0, 15.0, 9.5, 4.0]
+            seasonal_normal = monthly_normals[month_idx]
+            temp_anom = max(-10.0, min(10.0, temp_val - seasonal_normal))
 
-            temp_elasticity = cfg.get("temp_elasticity", 0.0)
-            if temp_val > 25.0:
-                temp_mult = 1.0 + ((temp_val - 25.0) * temp_elasticity)
-            elif temp_val < 5.0 and cfg.get("snow_elasticity", 0.0) != 0:
-                temp_mult = 1.0 + ((5.0 - temp_val) * cfg.get("snow_elasticity", 0.0))
+            # Scaled daily precipitation shock
+            effective_rain = min(rain_val, 30.0) * 0.35
+            rain_effect = effective_rain * cfg.get("rain_elasticity", 0.0)
+
+            # Temperature anomaly shock
+            temp_effect = temp_anom * cfg.get("temp_elasticity", 0.0)
+
+            # Freezing / snow precipitation shock
+            if temp_val <= 0.0 and rain_val > 0.0:
+                effective_snow = min(rain_val * 0.8, 20.0) * 0.40
+                snow_effect = effective_snow * cfg.get("snow_elasticity", 0.0)
             else:
-                temp_mult = 1.0
+                snow_effect = 0.0
 
-            combined_mult = rain_mult * temp_mult
-            day_act = day_base * max(0.15, combined_mult)
+            # Additive linear econometric formulation bounded in realistic financial ranges
+            total_multiplier = max(0.20, min(2.20, 1.0 + rain_effect + temp_effect + snow_effect))
+            day_act = day_base * total_multiplier
 
             series_base.append(round(day_base, 0))
             series_actual.append(round(day_act, 0))
@@ -415,6 +426,22 @@ def generate_live_weather_ai_forecast(
         if "car_wash" in active_keys:
             ai_advice.append(
                 f"Car Wash Maintenance: Wash volumes will decline sharply on {rain_str}. Schedule bay equipment maintenance and staff training during these downtime intervals."
+            )
+        if "nyc_taxi" in active_keys:
+            ai_advice.append(
+                f"Taxi & Rideshare Fleet: Rain forecasted on {rain_str} will boost hail demand +25% across transit interchanges. Pre-position vehicles in commercial hubs ahead of precipitation."
+            )
+        if any("citibike" in k for k in active_keys):
+            ai_advice.append(
+                f"Micromobility Operations: Precipitation on {rain_str} will reduce bike-share checkouts by -40% to -60%. Divert field staff to warehouse depot maintenance and battery swapping."
+            )
+        if "online_retail" in active_keys:
+            ai_advice.append(
+                f"E-Commerce Retail: Inclement weather on {rain_str} increases consumer indoor browsing. Trigger automated promotional email campaigns and abandoned cart reminders."
+            )
+        if any("chipotle" in k for k in active_keys):
+            ai_advice.append(
+                f"Fast-Casual Dining Floor: Precipitation on {rain_str} depresses dine-in foot traffic. Prep the digital makeline (DML) stations and allocate staff to packaging delivery orders."
             )
 
     if max_temp_forecast >= 32.0:

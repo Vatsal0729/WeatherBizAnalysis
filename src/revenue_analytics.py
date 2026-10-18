@@ -405,11 +405,17 @@ def calculate_custom_business_daily_series(df_daily, business_keys, custom_catal
             cfg["base_daily_rev"] * dow_factors[d.dayofweek] for d in df["date"]
         ])
         
-        rain_effect = df["precip_accumulation_mm"].values * cfg["rain_elasticity"]
-        snow_effect = df["snow_depth_delta_cm"].values * cfg["snow_elasticity"]
-        temp_effect = df["temp_anomaly_deg_c"].values * cfg["temp_elasticity"]
+        # Scaled daily weather impacts (prevents explosive multipliers from 24h accumulated precipitation)
+        effective_rain = np.minimum(df["precip_accumulation_mm"].values, 30.0) * 0.35
+        rain_effect = effective_rain * cfg.get("rain_elasticity", 0.0)
         
-        total_weather_multiplier = np.maximum(0.15, 1.0 + rain_effect + snow_effect + temp_effect)
+        effective_snow = np.minimum(np.maximum(0.0, df["snow_depth_delta_cm"].values), 20.0) * 0.40
+        snow_effect = effective_snow * cfg.get("snow_elasticity", 0.0)
+        
+        bounded_temp_anom = np.clip(df["temp_anomaly_deg_c"].values, -10.0, 10.0)
+        temp_effect = bounded_temp_anom * cfg.get("temp_elasticity", 0.0)
+        
+        total_weather_multiplier = np.clip(1.0 + rain_effect + snow_effect + temp_effect, 0.20, 2.20)
         
         actual_rev = np.round(base_series * total_weather_multiplier, 2)
         base_rev = np.round(base_series, 2)
@@ -799,6 +805,62 @@ def generate_business_specific_domino_effects(selected_city, weather_info, activ
                 downstream = f"High dock depletion at commercial hubs requires active rebalancing fleet dispatch."
                 action = f"Deploy rebalancing vans to transit hubs before evening rush hour to keep docks adequately supplied."
 
+        elif "nyc_taxi" in b_key:
+            if rain_mm >= 0.5:
+                trig = f"Precipitation ({rain_mm:.1f} mm) makes street walking and subway transfers unpleasant across {city_name}."
+                beh = f"Pedestrians and commuters hail yellow taxis and rideshare vehicles simultaneously."
+                rev = f"Fleet passenger fares surge by {pct_change:+.1f}% (+${dollar_delta:,.0f}), driving driver meter earnings."
+                downstream = f"High demand at office corridors and transit hubs; traffic congestion slows average trip completion times."
+                action = f"Pre-position fleet vehicles around high-density transit interchanges and corporate corridors ahead of forecasted rain."
+            else:
+                trig = f"Clear roadway and weather conditions across {city_name}."
+                beh = f"Pedestrians opt for walking and micromobility, keeping taxi hail demand at baseline."
+                rev = f"Gross trip fares track steady baseline expectations ({pct_change:+.1f}%, {'+$' if dollar_delta >= 0 else '-$'}{abs(dollar_delta):,.0f})."
+                downstream = f"Steady vehicle velocity and normal passenger wait times across metropolitan boroughs."
+                action = f"Maintain standard driver shifts and target airport corridors (JFK/LGA) where baseline trip volume remains consistent."
+
+        elif "citibike" in b_key:
+            if rain_mm >= 0.5 or temp_c <= 4.0:
+                trig = f"Wet pavement and poor weather make urban cycling hazardous in {city_name}."
+                beh = f"Commuters and casual riders bypass bike-share stations, shifting directly to subways or taxis."
+                rev = f"Ride rental checkouts contract by {pct_change:+.1f}% ({'-$' if dollar_delta < 0 else '+$'}{abs(dollar_delta):,.0f}), idling public docks."
+                downstream = f"Bikes accumulate at residential docks while subway turnstiles experience surge volume; dock rebalancing operations halt."
+                action = f"Suspend street rebalancing van operations during heavy storms and stage maintenance inspections on returned e-bikes."
+            else:
+                trig = f"Dry roadways and temperate weather ({temp_c:.1f}°C) create prime cycling conditions."
+                beh = f"Commuters and recreational riders opt for bikes and e-scooters for point-to-point transit."
+                rev = f"Bike-share checkouts surge by {pct_change:+.1f}% (+${dollar_delta:,.0f}), driving high dock turnover."
+                downstream = f"Rapid dock depletion at commercial hubs requires active rebalancing van sweeps."
+                action = f"Deploy rebalancing teams to morning transit terminals to ensure return docks remain available."
+
+        elif "online_retail" in b_key:
+            if rain_mm >= 0.5 or temp_c <= 5.0:
+                trig = f"Cold temperatures and rainfall keep consumers indoors at work or home desks."
+                beh = f"Shoppers spend extended dwell times browsing online catalogs and completing digital checkout baskets."
+                rev = f"Daily invoice revenue expands by {pct_change:+.1f}% (+${dollar_delta:,.0f}), accelerating commercial sales."
+                downstream = f"Warehouse fulfillment centers face higher pick-and-pack queues; outbound courier dispatch contends with wet road traffic."
+                action = f"Trigger automated email promotions to high-intent shoppers and allocate extra personnel to order packing lines."
+            else:
+                trig = f"Mild and pleasant outdoor conditions encourage physical activities."
+                beh = f"Shoppers spend less time behind desktop screens and mobile browsing apps."
+                rev = f"Invoice revenue tracks normal baseline expectations ({pct_change:+.1f}%, {'+$' if dollar_delta >= 0 else '-$'}{abs(dollar_delta):,.0f})."
+                downstream = f"Fulfillment lines operate at standard throughput with predictable turnaround times."
+                action = f"Run scheduled seasonal promotions and maintain regular warehouse dispatch rosters."
+
+        elif "chipotle" in b_key:
+            if rain_mm >= 0.5 or temp_c <= 0.0:
+                trig = f"Adverse weather conditions and winter precipitation across store footprints."
+                beh = f"Walk-in restaurant dining room footfall contracts, shifting order volume heavily into digital apps and delivery."
+                rev = f"In-person dining revenue softens, but digital channel mix expands to ~65%, cushioning revenue impact ({pct_change:+.1f}%, {'+$' if dollar_delta >= 0 else '-$'}{abs(dollar_delta):,.0f})."
+                downstream = f"Dedicated digital makeline (DML) stations experience peak order assembly volume; courier pickup congestion forms."
+                action = f"Reassign kitchen crew to the digital makeline (DML) and ensure ingredient prep bins are fully stocked for fast order turnaround."
+            else:
+                trig = f"Favorable atmospheric conditions support fast-casual restaurant foot traffic."
+                beh = f"Lunchtime workers and dinner patrons visit physical restaurants for walk-in ordering."
+                rev = f"Quarterly sales track corporate 10-Q baseline expectations ({pct_change:+.1f}%, {'+$' if dollar_delta >= 0 else '-$'}{abs(dollar_delta):,.0f})."
+                downstream = f"Balanced throughput across both front makeline and digital makeline; smooth dining room turnover."
+                action = f"Ensure full front-of-house counter staffing during the 12:00–14:00 and 18:00–20:00 peak dining hours."
+
         elif "rideshare" in b_key:
             if rain_mm >= 0.5:
                 trig = f"Rain creates immediate demand for private, dry vehicular transit in {city_name}."
@@ -1134,15 +1196,18 @@ def generate_future_ai_forecast(active_keys, forecast_event, custom_catalog=None
             day_base = base * dow_m
             
             if "Rain" in forecast_event:
-                mult = 1.0 + w_val * cfg["rain_elasticity"]
+                eff_rain = min(w_val, 30.0) * 0.35
+                mult = 1.0 + eff_rain * cfg.get("rain_elasticity", 0.0)
             elif "Blizzard" in forecast_event:
-                mult = 1.0 + w_val * cfg["snow_elasticity"]
+                eff_snow = min(w_val, 20.0) * 0.40
+                mult = 1.0 + eff_snow * cfg.get("snow_elasticity", 0.0)
             elif "Heatwave" in forecast_event:
-                mult = 1.0 + (w_val - 25.0) * cfg["temp_elasticity"]
+                temp_anom = min(12.0, max(0.0, w_val - 25.0))
+                mult = 1.0 + temp_anom * cfg.get("temp_elasticity", 0.0)
             else:
                 mult = 1.0
                 
-            day_act = day_base * max(0.15, mult)
+            day_act = day_base * max(0.20, min(2.20, mult))
             series_base.append(round(day_base, 0))
             series_actual.append(round(day_act, 0))
             
@@ -1175,6 +1240,14 @@ def generate_future_ai_forecast(active_keys, forecast_event, custom_catalog=None
         ai_advice.append("Cold Drinks Inventory: Sales of cold treats will jump +45%. Double your ice orders and check that refrigerators are running cold.")
     if "golf_theme_park" in active_keys and "Rain" in forecast_event:
         ai_advice.append("Outdoor Venues: Rain will reduce tee times and ticket sales by -75%. Offer indoor simulator discounts or rain-check booking vouchers.")
+    if "nyc_taxi" in active_keys and ("Rain" in forecast_event or "Blizzard" in forecast_event):
+        ai_advice.append("Taxi & Rideshare Fleet: Street hail demand jumps +25% during rain. Broadcast driver heat maps toward transit interchanges and subway hubs 30 minutes before heavy showers.")
+    if any("citibike" in k for k in active_keys) and ("Rain" in forecast_event or "Blizzard" in forecast_event):
+        ai_advice.append("Micromobility Operations: Bike-share checkouts drop -40% to -65% on wet pavement. Halt street rebalancing van runs during storms to avoid traffic and focus on depot e-bike charging.")
+    if "online_retail" in active_keys and ("Rain" in forecast_event or "Blizzard" in forecast_event):
+        ai_advice.append("E-Commerce Marketing: Cold and rainy afternoons trigger +15% higher checkout conversions. Schedule automated email promotions and flash discounts for rainy days.")
+    if any("chipotle" in k for k in active_keys) and ("Rain" in forecast_event or "Blizzard" in forecast_event):
+        ai_advice.append("Fast-Casual Restaurant Operations: Inclement weather depresses dining room footfall while digital orders surge. Prioritize digital makeline (DML) ingredients and packaging.")
         
     if not ai_advice:
         ai_advice.append("Standard Operations: Regular conditions expected. Maintain baseline staffing schedules and normal inventory reorder points.")

@@ -3,7 +3,8 @@
 const state = {
     city: "NYC",
     catalog: [],
-    selectedKeys: ["square_pos_live", "stripe_gateway_live", "food_delivery", "dine_in_restaurant"],
+    selectedKey: "nyc_taxi",
+    selectedKeys: ["nyc_taxi"],
     customBusinesses: {},
     weather: null,
     activeTab: "tab1",
@@ -62,74 +63,13 @@ function setupEventListeners() {
         await refreshAllForNewCity();
     });
 
-    // Portfolio Multi-Select Dropdown Toggle & Controls
-    const portfolioDropdown = document.getElementById("portfolioDropdown");
-    const portfolioDropdownBtn = document.getElementById("portfolioDropdownBtn");
-    const portfolioSearchInput = document.getElementById("portfolioSearchInput");
-
-    if (portfolioDropdownBtn) {
-        portfolioDropdownBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            portfolioDropdown.classList.toggle("open");
-            const isOpen = portfolioDropdown.classList.contains("open");
-            portfolioDropdownBtn.setAttribute("aria-expanded", isOpen);
-            if (isOpen && portfolioSearchInput) {
-                portfolioSearchInput.value = "";
-                document.querySelectorAll("#portfolioDropdownItems .multiselect-item").forEach(item => {
-                    item.style.display = "flex";
-                });
-                portfolioSearchInput.focus();
-            }
-        });
-    }
-
-    const portfolioDropdownMenu = document.getElementById("portfolioDropdownMenu");
-    if (portfolioDropdownMenu) {
-        portfolioDropdownMenu.addEventListener("click", (e) => {
-            e.stopPropagation();
-        });
-    }
-
-    document.addEventListener("click", () => {
-        if (portfolioDropdown) {
-            portfolioDropdown.classList.remove("open");
-            if (portfolioDropdownBtn) portfolioDropdownBtn.setAttribute("aria-expanded", "false");
-        }
-    });
-
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && portfolioDropdown) {
-            portfolioDropdown.classList.remove("open");
-            if (portfolioDropdownBtn) portfolioDropdownBtn.setAttribute("aria-expanded", "false");
-        }
-    });
-
-    if (portfolioSearchInput) {
-        portfolioSearchInput.addEventListener("input", (e) => {
-            const query = e.target.value.toLowerCase().trim();
-            document.querySelectorAll("#portfolioDropdownItems .multiselect-item").forEach(item => {
-                const name = item.getAttribute("data-name") || "";
-                item.style.display = name.toLowerCase().includes(query) ? "flex" : "none";
-            });
-        });
-    }
-
-    const selectAllBtn = document.getElementById("selectAllBizBtn");
-    if (selectAllBtn) {
-        selectAllBtn.addEventListener("click", async () => {
-            state.selectedKeys = state.catalog.map(c => c.key);
-            renderPortfolioDropdown();
-            await loadPortfolioData();
-            if (state.activeTab === "tab3") await loadDominoData();
-            if (state.activeTab === "tab4") await loadNowcastData();
-        });
-    }
-
-    const clearAllBtn = document.getElementById("clearAllBizBtn");
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener("click", async () => {
-            state.selectedKeys = ["square_pos", "stripe_payments"];
-            renderPortfolioDropdown();
+    // Single Business Selector Dropdown
+    const businessSelect = document.getElementById("businessSelect");
+    if (businessSelect) {
+        businessSelect.addEventListener("change", async (e) => {
+            state.selectedKey = e.target.value;
+            state.selectedKeys = [state.selectedKey];
+            updateCadenceBadge(state.selectedKey);
             await loadPortfolioData();
             if (state.activeTab === "tab3") await loadDominoData();
             if (state.activeTab === "tab4") await loadNowcastData();
@@ -184,83 +124,89 @@ function setupEventListeners() {
         loadNowcastData();
     });
 
-    // Custom Business Modal
+    // Custom Business Modal (if present)
     const customModal = document.getElementById("customBizModal");
-    document.getElementById("openCustomBizModal").addEventListener("click", () => customModal.classList.add("active"));
-    document.getElementById("closeCustomBizModal").addEventListener("click", () => customModal.classList.remove("active"));
-    document.getElementById("cancelCustomBiz").addEventListener("click", () => customModal.classList.remove("active"));
+    const openCustomBtn = document.getElementById("openCustomBizModal");
+    if (customModal && openCustomBtn) {
+        openCustomBtn.addEventListener("click", () => customModal.classList.add("active"));
+        document.getElementById("closeCustomBizModal")?.addEventListener("click", () => customModal.classList.remove("active"));
+        document.getElementById("cancelCustomBiz")?.addEventListener("click", () => customModal.classList.remove("active"));
 
-    document.getElementById("customBizForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const name = document.getElementById("newBizName").value.trim();
-        const category_hint = document.getElementById("newBizCategory").value;
-        const custom_rev = parseFloat(document.getElementById("newBizRev").value);
-        const custom_color = document.getElementById("newBizColor").value;
-        const custom_rain = parseFloat(document.getElementById("newBizRain").value);
-        const custom_temp = parseFloat(document.getElementById("newBizTemp").value);
+        document.getElementById("customBizForm")?.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const name = document.getElementById("newBizName").value.trim();
+            const category_hint = document.getElementById("newBizCategory").value;
+            const custom_rev = parseFloat(document.getElementById("newBizRev").value);
+            const custom_color = document.getElementById("newBizColor").value;
+            const custom_rain = parseFloat(document.getElementById("newBizRain").value);
+            const custom_temp = parseFloat(document.getElementById("newBizTemp").value);
 
-        try {
-            const resp = await fetch("/api/custom-business", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, category_hint, custom_rev, custom_color, custom_rain, custom_temp })
-            });
-            const res = await resp.json();
-            if (res.success) {
-                state.customBusinesses[res.slug] = res.config;
-                if (!state.selectedKeys.includes(res.slug)) {
-                    state.selectedKeys.push(res.slug);
+            try {
+                const resp = await fetch("/api/custom-business", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, category_hint, custom_rev, custom_color, custom_rain, custom_temp })
+                });
+                const res = await resp.json();
+                if (res.success) {
+                    state.customBusinesses[res.slug] = res.config;
+                    if (!state.selectedKeys.includes(res.slug)) {
+                        state.selectedKeys.push(res.slug);
+                    }
+                    customModal.classList.remove("active");
+                    document.getElementById("customBizForm").reset();
+                    await loadInitialState();
                 }
-                customModal.classList.remove("active");
-                document.getElementById("customBizForm").reset();
-                await loadInitialState();
+            } catch (err) {
+                alert("Error creating business: " + err);
             }
-        } catch (err) {
-            alert("Error creating business: " + err);
-        }
-    });
+        });
+    }
 
-    // Upload CSV Modal
+    // Upload CSV Modal (if present)
     const uploadModal = document.getElementById("uploadCsvModal");
-    document.getElementById("openUploadCsvModal").addEventListener("click", () => uploadModal.classList.add("active"));
-    document.getElementById("closeUploadCsvModal").addEventListener("click", () => uploadModal.classList.remove("active"));
-    document.getElementById("cancelUploadCsv").addEventListener("click", () => uploadModal.classList.remove("active"));
+    const openUploadBtn = document.getElementById("openUploadCsvModal");
+    if (uploadModal && openUploadBtn) {
+        openUploadBtn.addEventListener("click", () => uploadModal.classList.add("active"));
+        document.getElementById("closeUploadCsvModal")?.addEventListener("click", () => uploadModal.classList.remove("active"));
+        document.getElementById("cancelUploadCsv")?.addEventListener("click", () => uploadModal.classList.remove("active"));
 
-    document.getElementById("uploadCsvForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const fileInput = document.getElementById("csvFileInput");
-        if (!fileInput.files.length) return;
+        document.getElementById("uploadCsvForm")?.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("csvFileInput");
+            if (!fileInput.files.length) return;
 
-        const formData = new FormData();
-        formData.append("file", fileInput.files[0]);
-        formData.append("store_name", document.getElementById("storeName").value);
-        formData.append("city", state.city);
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            formData.append("store_name", document.getElementById("storeName").value);
+            formData.append("city", state.city);
 
-        const statusEl = document.getElementById("uploadStatusText");
-        statusEl.innerHTML = "<span style='color:#38BDF8;'>Analyzing transaction history and computing weather regressions...</span>";
+            const statusEl = document.getElementById("uploadStatusText");
+            statusEl.innerHTML = "<span style='color:#38BDF8;'>Analyzing transaction history and computing weather regressions...</span>";
 
-        try {
-            const resp = await fetch("/api/upload-csv", {
-                method: "POST",
-                body: formData
-            });
-            const res = await resp.json();
-            if (res.success) {
-                state.customBusinesses[res.slug] = res.config;
-                if (!state.selectedKeys.includes(res.slug)) {
-                    state.selectedKeys.push(res.slug);
+            try {
+                const resp = await fetch("/api/upload-csv", {
+                    method: "POST",
+                    body: formData
+                });
+                const res = await resp.json();
+                if (res.success) {
+                    state.customBusinesses[res.slug] = res.config;
+                    if (!state.selectedKeys.includes(res.slug)) {
+                        state.selectedKeys.push(res.slug);
+                    }
+                    uploadModal.classList.remove("active");
+                    document.getElementById("uploadCsvForm").reset();
+                    statusEl.innerHTML = "";
+                    await loadInitialState();
+                } else {
+                    statusEl.innerHTML = `<span style='color:#FF5252;'>Error: ${res.error}</span>`;
                 }
-                uploadModal.classList.remove("active");
-                document.getElementById("uploadCsvForm").reset();
-                statusEl.innerHTML = "";
-                await loadInitialState();
-            } else {
-                statusEl.innerHTML = `<span style='color:#FF5252;'>Error: ${res.error}</span>`;
+            } catch (err) {
+                statusEl.innerHTML = `<span style='color:#FF5252;'>Upload failed: ${err}</span>`;
             }
-        } catch (err) {
-            statusEl.innerHTML = `<span style='color:#FF5252;'>Upload failed: ${err}</span>`;
-        }
-    });
+        });
+    }
 }
 
 // --- DATA FETCHING & RENDERING ---
@@ -272,9 +218,16 @@ async function loadInitialState() {
 
         state.catalog = data.catalog;
         state.weather = data.weather;
+        if (data.default_selected && data.default_selected.length > 0) {
+            state.selectedKey = data.default_selected[0];
+            state.selectedKeys = [state.selectedKey];
+        } else if (state.catalog && state.catalog.length > 0) {
+            state.selectedKey = state.catalog[0].key;
+            state.selectedKeys = [state.selectedKey];
+        }
 
-        // Render Portfolio Chips
-        renderPortfolioChips();
+        // Render Business Dropdown
+        renderBusinessDropdown();
 
         // Update Weather Ribbon
         renderWeatherRibbon(data.weather);
@@ -338,82 +291,60 @@ function resetSimulationToLive() {
     document.getElementById("simTempAnomVal").textContent = `${tempAnom >= 0 ? '+' : ''}${tempAnom.toFixed(1)}°C`;
 }
 
-// Update Portfolio Dropdown Trigger Label & Count
-function updatePortfolioDropdownLabel() {
-    const selectedCount = state.selectedKeys.length;
-    const countEl = document.getElementById("selectedCount");
-    if (countEl) countEl.textContent = selectedCount;
+// Currency Formatter
+function formatCurrency(val) {
+    if (val === null || val === undefined || isNaN(val)) return "$0";
+    const num = Number(val);
+    const sign = num < 0 ? "-$" : "";
+    const absVal = Math.abs(num);
+    if (absVal >= 1e9) {
+        return `${sign}${(absVal / 1e9).toFixed(2)}B`;
+    }
+    if (absVal >= 1e6) {
+        return `${sign}${(absVal / 1e6).toFixed(2)}M`;
+    }
+    return `${sign}${Math.round(absVal).toLocaleString()}`;
+}
 
-    const labelEl = document.getElementById("portfolioSelectedLabel");
-    if (!labelEl) return;
-
-    const selectedItems = state.catalog.filter(item => state.selectedKeys.includes(item.key));
-    if (selectedCount === 0) {
-        labelEl.textContent = "Select Monitored Businesses...";
-    } else if (selectedCount === 1) {
-        labelEl.textContent = selectedItems[0]?.clean_name || "1 Business Selected";
-    } else if (selectedCount === 2) {
-        labelEl.textContent = `${selectedItems[0]?.clean_name || ""}, ${selectedItems[1]?.clean_name || ""}`;
-    } else if (selectedCount === state.catalog.length) {
-        labelEl.textContent = `All Businesses Monitored (${selectedCount} Total)`;
+// Update Cadence Badge Pill
+function updateCadenceBadge(bKey) {
+    const badge = document.getElementById("cadenceBadge");
+    if (!badge) return;
+    const item = state.catalog.find(c => c.key === bKey);
+    const cadence = item?.cadence || "daily";
+    badge.className = `cadence-badge cadence-${cadence}`;
+    if (cadence === "quarterly") {
+        badge.textContent = "Quarterly SEC 10-Q";
+    } else if (cadence === "hourly") {
+        badge.textContent = "Hourly TLC Stream";
     } else {
-        const firstTwo = selectedItems.slice(0, 2).map(i => i.clean_name).join(", ");
-        labelEl.textContent = `${selectedCount} Selected: ${firstTwo} (+${selectedCount - 2} more)`;
+        badge.textContent = item?.cadence_label || "Daily Operations";
     }
 }
 
-// Render Portfolio Multi-Select Dropdown in Control Bar
-function renderPortfolioDropdown() {
-    const container = document.getElementById("portfolioDropdownItems");
-    if (!container) return;
-    container.innerHTML = "";
+// Render Single-Business Dropdown for Real-World Production Datasets
+function renderBusinessDropdown() {
+    const select = document.getElementById("businessSelect");
+    if (!select) return;
+    select.innerHTML = "";
 
     state.catalog.forEach(item => {
-        const isSelected = state.selectedKeys.includes(item.key);
-        const row = document.createElement("div");
-        row.className = `multiselect-item ${isSelected ? 'selected' : ''}`;
-        row.setAttribute("data-name", item.clean_name);
-        row.innerHTML = `
-            <input type="checkbox" class="multiselect-checkbox" ${isSelected ? 'checked' : ''}>
-            <span class="multiselect-item-dot" style="background-color: ${item.color};"></span>
-            <span class="multiselect-item-name">${item.clean_name}</span>
-            ${item.is_custom ? '<span class="multiselect-item-badge">Custom</span>' : ''}
-        `;
-
-        row.addEventListener("click", async (e) => {
-            const checkbox = row.querySelector("input[type='checkbox']");
-            if (e.target !== checkbox) {
-                checkbox.checked = !checkbox.checked;
-            }
-
-            if (checkbox.checked) {
-                if (!state.selectedKeys.includes(item.key)) {
-                    state.selectedKeys.push(item.key);
-                }
-                row.classList.add("selected");
-            } else {
-                if (state.selectedKeys.length <= 1) {
-                    alert("Please keep at least one business in your portfolio.");
-                    checkbox.checked = true;
-                    return;
-                }
-                state.selectedKeys = state.selectedKeys.filter(k => k !== item.key);
-                row.classList.remove("selected");
-            }
-
-            updatePortfolioDropdownLabel();
-            await loadPortfolioData();
-            if (state.activeTab === "tab3") await loadDominoData();
-            if (state.activeTab === "tab4") await loadNowcastData();
-        });
-
-        container.appendChild(row);
+        const opt = document.createElement("option");
+        opt.value = item.key;
+        const cadLabel = item.cadence_label || (item.cadence === 'quarterly' ? 'Quarterly' : item.cadence === 'hourly' ? 'Hourly' : 'Daily');
+        opt.textContent = `${item.clean_name} (${cadLabel})`;
+        if (item.key === state.selectedKey) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
     });
 
-    updatePortfolioDropdownLabel();
+    select.value = state.selectedKey;
+    updateCadenceBadge(state.selectedKey);
 }
 
-const renderPortfolioChips = renderPortfolioDropdown;
+const renderPortfolioChips = renderBusinessDropdown;
+const renderPortfolioDropdown = renderBusinessDropdown;
 
 // Render Weather Ribbon
 function renderWeatherRibbon(pkg) {
@@ -446,7 +377,7 @@ async function loadPortfolioData() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 city: state.city,
-                selected_keys: state.selectedKeys,
+                selected_keys: [state.selectedKey],
                 custom_businesses: state.customBusinesses,
                 horizon: state.horizon,
                 inspected_day_idx: state.inspectedDayIdx
@@ -459,35 +390,49 @@ async function loadPortfolioData() {
             return;
         }
 
+        const cadence = data.cadence || "daily";
+        updateCadenceBadge(state.selectedKey);
+
         // 1. KPI Cards
         const m = data.metrics;
-        const sign = m.total_week_impact >= 0 ? "+$" : "-$";
         const impactEl = document.getElementById("kpiShift");
-        impactEl.textContent = `${sign}${Math.abs(Math.round(m.total_week_impact)).toLocaleString()}`;
+        impactEl.textContent = formatCurrency(m.total_week_impact);
         impactEl.className = `metric-number ${m.total_week_impact >= 0 ? 'status-positive' : 'status-negative'}`;
 
         document.getElementById("kpiShiftSub").innerHTML = `
             <span class="${m.total_week_impact >= 0 ? 'status-positive' : 'status-negative'}">
                 ${m.total_week_impact >= 0 ? 'Extra Gain' : 'Lost Sales'}
-            </span> vs clear baseline
+            </span> vs baseline
         `;
 
-        document.getElementById("kpiEarned").textContent = `$${Math.round(m.total_week_actual).toLocaleString()}`;
-        document.getElementById("kpiEarnedSub").textContent = `Normal expected: $${Math.round(m.total_week_base).toLocaleString()}`;
+        document.getElementById("kpiEarned").textContent = formatCurrency(m.total_week_actual).replace(/^\+/, '');
+        document.getElementById("kpiEarnedSub").textContent = `Expected: ${formatCurrency(m.total_week_base).replace(/^\+/, '')}`;
 
-        document.getElementById("kpiUnits").textContent = `${m.portfolio_count} Units`;
-        document.getElementById("kpiUnitsSub").textContent = `Market: ${state.city}`;
+        const unitsEl = document.getElementById("kpiUnits");
+        const unitsSub = document.getElementById("kpiUnitsSub");
+        if (unitsEl && unitsSub) {
+            if (cadence === "quarterly") {
+                unitsEl.textContent = "1 Enterprise";
+                unitsSub.textContent = "Filing: SEC 10-Q";
+            } else if (cadence === "hourly") {
+                unitsEl.textContent = "1 Fleet";
+                unitsSub.textContent = "Market: NYC TLC";
+            } else {
+                unitsEl.textContent = "1 Business";
+                unitsSub.textContent = `Market: ${state.city}`;
+            }
+        }
 
         document.getElementById("kpiRain").textContent = `${m.total_rain_week.toFixed(1)} mm`;
 
-        // 2. Render 7-Day Chart (Pure White Line Specs)
-        render7DayChart(data.chart_7d);
+        // 2. Render 7-Day Chart
+        render7DayChart(data.chart_7d, cadence);
 
         // 3. Render Day in Review
-        renderDayInReview(data.day_in_review, data.chart_7d);
+        renderDayInReview(data.day_in_review, data.chart_7d, cadence);
 
         // 4. Render Historical Timeline Chart
-        renderHistoricalChart(data.historical_timeline);
+        renderHistoricalChart(data.historical_timeline, cadence);
 
         // 5. Render Econometrics Comparison Table
         renderEconometricsTable(data.econometrics_table);
@@ -498,12 +443,71 @@ async function loadPortfolioData() {
 }
 
 // Render Tab 1 Chart
-function render7DayChart(chartData) {
+function render7DayChart(chartData, cadence) {
     const traces = [];
+
+    if (cadence === "quarterly") {
+        chartData.businesses.forEach(b => {
+            // Actual Quarterly Revenue as Bars
+            traces.push({
+                x: chartData.x_labels,
+                y: b.actual,
+                name: `${b.clean_label} — Reported 10-Q`,
+                type: "bar",
+                marker: { color: b.color || "#F59E0B", opacity: 0.88, line: { color: "#FBBF24", width: 1.2 } },
+                hovertemplate: `<b>%{x}</b><br>Reported Net Revenue: $%{y:,.0f}<extra></extra>`
+            });
+
+            // Baseline Expectation as Line
+            traces.push({
+                x: chartData.x_labels,
+                y: b.baseline,
+                name: `${b.clean_label} — Baseline Expectation`,
+                mode: "lines+markers",
+                line: { color: "#FFFFFF", width: 2.2, dash: "dash" },
+                marker: { size: 8, color: "#FFFFFF", symbol: "diamond" },
+                hovertemplate: `<b>%{x} Baseline</b><br>Expected Revenue: $%{y:,.0f}<extra></extra>`
+            });
+        });
+
+        const layout = {
+            template: "plotly_dark",
+            paper_bgcolor: "#111827",
+            plot_bgcolor: "#111827",
+            font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
+            height: 520,
+            margin: { l: 85, r: 25, t: 30, b: 90 },
+            yaxis: {
+                title: { text: "Reported Net Revenue ($ USD)", standoff: 18 },
+                automargin: true,
+                fixedrange: true,
+                gridcolor: "rgba(56, 189, 248, 0.10)",
+                zeroline: false
+            },
+            xaxis: {
+                fixedrange: true,
+                gridcolor: "rgba(255, 255, 255, 0.05)",
+                tickfont: { size: 11, color: "#CBD5E1" }
+            },
+            legend: {
+                orientation: "h",
+                yanchor: "top",
+                y: -0.20,
+                xanchor: "center",
+                x: 0.5,
+                font: { size: 11, color: "#E2E8F0" },
+                bgcolor: "rgba(17, 24, 39, 0.8)",
+                bordercolor: "rgba(255, 255, 255, 0.12)",
+                borderwidth: 1
+            }
+        };
+
+        Plotly.newPlot("chart7d", traces, layout, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+        return;
+    }
 
     // Revenue traces for each business (Solid actual, dashed baseline)
     chartData.businesses.forEach(b => {
-        // Actual trace (Pure White / High Vis Color, width 2.8)
         traces.push({
             x: chartData.x_labels,
             y: b.actual,
@@ -516,7 +520,6 @@ function render7DayChart(chartData) {
             hovertemplate: `<b>${b.name}</b><br>Actual Sales: $%{y:,.0f}<extra></extra>`
         });
 
-        // Baseline trace (Dashed, width 1.8)
         traces.push({
             x: chartData.x_labels,
             y: b.baseline,
@@ -591,7 +594,7 @@ function render7DayChart(chartData) {
 }
 
 // Render Day in Review Section
-function renderDayInReview(dayReview, chart7d) {
+function renderDayInReview(dayReview, chart7d, cadence) {
     const daySelect = document.getElementById("daySelect");
     daySelect.innerHTML = "";
 
@@ -604,8 +607,8 @@ function renderDayInReview(dayReview, chart7d) {
     });
 
     document.getElementById("dayHeaderSummary").innerHTML = `
-        <strong>Date:</strong> ${dayReview.day_name} (${dayReview.date_str}) &nbsp;|&nbsp; 
-        <strong>Weather:</strong> ${dayReview.weather_icon} (${dayReview.temperature}°C, ${dayReview.rain} mm rain)
+        <strong>Interval:</strong> ${dayReview.day_name} (${dayReview.date_str}) &nbsp;|&nbsp; 
+        <strong>Atmospheric / Source:</strong> ${dayReview.weather_icon} (${dayReview.temperature}°C, ${dayReview.rain} mm rain)
     `;
 
     // Render Cards
@@ -613,22 +616,29 @@ function renderDayInReview(dayReview, chart7d) {
     grid.innerHTML = "";
 
     dayReview.insights.forEach(ins => {
-        const sign = ins.delta >= 0 ? "+$" : "-$";
-        const badgeCls = ins.delta >= 0 ? "status-positive" : "status-negative";
+        const delta = ins.delta ?? 0;
+        const sign = delta >= 0 ? "+$" : "-$";
+        const badgeCls = delta >= 0 ? "status-positive" : "status-negative";
+        const actualRev = ins.actual_rev ?? 0;
+        const baselineRev = ins.baseline_rev ?? 0;
+        const pctChange = ins.pct_change ?? (baselineRev > 0 ? (delta / baselineRev * 100) : 0);
+        const bullets = ins.bullets || [ins.trigger, ins.reaction, ins.financial, ins.linkage, ins.guidance].filter(Boolean);
+        const name = ins.name || ins.b_name || "Business Intelligence";
+
         const card = document.createElement("div");
         card.className = "insight-box";
         card.innerHTML = `
             <div>
                 <div class="insight-top">
-                    <span class="insight-title">${ins.name}</span>
-                    <span class="${badgeCls}">${sign}${Math.abs(Math.round(ins.delta)).toLocaleString()} (${ins.pct_change >= 0 ? '+' : ''}${ins.pct_change.toFixed(1)}%)</span>
+                    <span class="insight-title">${name}</span>
+                    <span class="${badgeCls}">${sign}${Math.abs(Math.round(delta)).toLocaleString()} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(1)}%)</span>
                 </div>
                 <div style="font-size: 0.80rem; color: #94A3B8; font-weight: 600; margin-bottom: 8px;">
-                    Earned: $${Math.round(ins.actual_rev).toLocaleString()} &nbsp;|&nbsp; Normal: $${Math.round(ins.baseline_rev).toLocaleString()}
+                    Earned: ${formatCurrency(actualRev).replace(/^\+/, '')} &nbsp;|&nbsp; Normal: ${formatCurrency(baselineRev).replace(/^\+/, '')}
                 </div>
                 <div class="insight-content">
-                    <strong style="color: #FFFFFF;">${ins.headline}</strong><br/>
-                    ${ins.bullets.map(b => `• ${b}`).join("<br/>")}
+                    <strong style="color: #FFFFFF;">${ins.headline || ''}</strong><br/>
+                    ${bullets.map(b => `• ${b}`).join("<br/>")}
                 </div>
             </div>
             <div class="insight-bottom">Category: ${ins.category || 'General'}</div>
@@ -636,7 +646,98 @@ function renderDayInReview(dayReview, chart7d) {
         grid.appendChild(card);
     });
 
-    // Render Hourly Table
+    // Update Details Summary Label and Table Headers
+    const summaryTitle = document.querySelector("#tab1 details summary");
+    const thead = document.querySelector("#tab1 details table thead");
+
+    if (cadence === "quarterly") {
+        if (summaryTitle) summaryTitle.textContent = "Quarterly Financial Filing Breakdown (SEC 10-Q)";
+        if (thead) {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>Quarter</th>
+                    <th>Avg Temp (°C)</th>
+                    <th>Precip (mm)</th>
+                    <th>Reported Revenue</th>
+                    <th>Filing Format</th>
+                    <th>Disclosure Type</th>
+                    <th>Baseline Normal</th>
+                    <th>YoY Variance</th>
+                </tr>
+            `;
+        }
+    } else if (state.selectedKey === "nyc_taxi") {
+        if (summaryTitle) summaryTitle.textContent = "Hourly Operational Breakdown (NYC TLC Fare Stream)";
+        if (thead) {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>Hour</th>
+                    <th>Temp (°C)</th>
+                    <th>Rainfall (mm)</th>
+                    <th>Trip Volume</th>
+                    <th>Avg Fare</th>
+                    <th>Hourly Revenue</th>
+                    <th>Completed Trips</th>
+                    <th>Telemetry Source</th>
+                </tr>
+            `;
+        }
+    } else if (state.selectedKey === "citibike_nyc") {
+        if (summaryTitle) summaryTitle.textContent = "Daily Ride Breakdown (Citi Bike NYC Micromobility)";
+        if (thead) {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Temp (°C)</th>
+                    <th>Rainfall (mm)</th>
+                    <th>Total Rides</th>
+                    <th>Member Rides</th>
+                    <th>Avg Duration</th>
+                    <th>Ride Volume</th>
+                    <th>Estimated Revenue</th>
+                </tr>
+            `;
+        }
+    } else if (state.selectedKey === "online_retail") {
+        if (summaryTitle) summaryTitle.textContent = "Daily Order Breakdown (UCI Commercial Online Retail)";
+        if (thead) {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Temp (°C)</th>
+                    <th>Rainfall (mm)</th>
+                    <th>Order Count</th>
+                    <th>Items Sold</th>
+                    <th>Avg Order Value</th>
+                    <th>Order Volume</th>
+                    <th>Daily Revenue</th>
+                </tr>
+            `;
+        }
+    } else {
+        if (summaryTitle) summaryTitle.textContent = "Hourly Analysis for Selected Day";
+        if (thead) {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>Time</th>
+                    <th>Temperature (°C)</th>
+                    <th>Rainfall (mm)</th>
+                    <th>Food Orders</th>
+                    <th>Price Surge</th>
+                    <th>Wait Time</th>
+                    <th>Bike Trips</th>
+                    <th>Traffic Jam</th>
+                </tr>
+            `;
+        }
+    }
+
+    // Render Table Rows
     const tbody = document.getElementById("hourlyTableBody");
     tbody.innerHTML = "";
     dayReview.hourly_table.forEach(row => {
@@ -657,8 +758,57 @@ function renderDayInReview(dayReview, chart7d) {
 }
 
 // Render Tab 2 Historical Timeline Chart
-function renderHistoricalChart(hist) {
+function renderHistoricalChart(hist, cadence) {
     const traces = [];
+
+    if (cadence === "quarterly") {
+        hist.businesses.forEach(b => {
+            traces.push({
+                x: hist.display_dates || hist.dates,
+                y: b.actual,
+                name: b.clean_label,
+                type: "bar",
+                marker: { color: b.color || "#F59E0B", line: { color: "#FBBF24", width: 1.2 } },
+                hovertemplate: `<b>${b.name}</b><br>Quarter: %{x}<br>Reported Revenue: $%{y:,.0f}<extra></extra>`
+            });
+        });
+
+        const layout = {
+            template: "plotly_dark",
+            paper_bgcolor: "#111827",
+            plot_bgcolor: "#111827",
+            font: { family: "Plus Jakarta Sans, sans-serif", size: 11, color: "#F8FAFC" },
+            height: 520,
+            margin: { l: 85, r: 25, t: 30, b: 90 },
+            yaxis: {
+                title: { text: "Quarterly Revenue ($ USD)", standoff: 18 },
+                automargin: true,
+                fixedrange: true,
+                gridcolor: "rgba(56, 189, 248, 0.10)",
+                zeroline: false
+            },
+            xaxis: {
+                type: "category",
+                fixedrange: true,
+                gridcolor: "rgba(255, 255, 255, 0.05)",
+                tickfont: { size: 11, color: "#CBD5E1" }
+            },
+            legend: {
+                orientation: "h",
+                yanchor: "top",
+                y: -0.22,
+                xanchor: "center",
+                x: 0.5,
+                font: { size: 11, color: "#E2E8F0" },
+                bgcolor: "rgba(17, 24, 39, 0.8)",
+                bordercolor: "rgba(255, 255, 255, 0.12)",
+                borderwidth: 1
+            }
+        };
+
+        Plotly.newPlot("chartHistorical", traces, layout, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+        return;
+    }
 
     hist.businesses.forEach(b => {
         traces.push({
@@ -761,7 +911,7 @@ async function loadDominoData() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 city: state.city,
-                selected_keys: state.selectedKeys,
+                selected_keys: [state.selectedKey],
                 custom_businesses: state.customBusinesses
             })
         });
@@ -897,7 +1047,7 @@ async function loadNowcastData() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 city: state.city,
-                selected_keys: state.selectedKeys,
+                selected_keys: [state.selectedKey],
                 custom_businesses: state.customBusinesses,
                 sim_dow: state.simDow,
                 sim_hour: state.simHour,
@@ -939,7 +1089,7 @@ async function loadNowcastData() {
                 ${metrics.map(m => `
                     <div class="metric-row">
                         <span style="font-weight:600; color:#F8FAFC;">${m.display_name}</span>
-                        <span>${m.weather_impacted} ${m.unit} <span class="${m.delta_pct >= 0 ? 'status-positive' : 'status-negative'}">${m.delta_pct >= 0 ? '+' : ''}${m.delta_pct.toFixed(1)}%</span></span>
+                        <span>${typeof m.weather_impacted === 'number' ? m.weather_impacted.toLocaleString() : m.weather_impacted} ${m.unit} <span class="${m.delta_pct >= 0 ? 'status-positive' : 'status-negative'}">${m.delta_pct >= 0 ? '+' : ''}${m.delta_pct.toFixed(1)}%</span></span>
                     </div>
                 `).join("")}
             `;

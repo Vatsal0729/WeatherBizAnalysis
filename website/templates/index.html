@@ -30,30 +30,14 @@
                     <option value="PHX">Phoenix (PHX)</option>
                 </select>
             </div>
-            <div class="portfolio-wrapper">
-                <label for="portfolioDropdownBtn">Active Monitored Portfolio (<span id="selectedCount">0</span> selected)</label>
-                <div class="custom-multiselect" id="portfolioDropdown">
-                    <button type="button" class="multiselect-trigger" id="portfolioDropdownBtn" aria-haspopup="true" aria-expanded="false">
-                        <span class="multiselect-label" id="portfolioSelectedLabel">Select Monitored Businesses...</span>
-                        <span class="multiselect-chevron">&#9662;</span>
-                    </button>
-                    <div class="multiselect-dropdown-menu" id="portfolioDropdownMenu">
-                        <div class="multiselect-header">
-                            <input type="text" id="portfolioSearchInput" placeholder="Filter businesses..." class="multiselect-search" autocomplete="off">
-                            <div class="multiselect-quick-actions">
-                                <button type="button" id="selectAllBizBtn" class="btn-text-action">Select All</button>
-                                <button type="button" id="clearAllBizBtn" class="btn-text-action">Reset</button>
-                            </div>
-                        </div>
-                        <div class="multiselect-items" id="portfolioDropdownItems">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
+            <div class="business-select-wrapper">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="businessSelect" style="margin-bottom: 0;">Monitored Business</label>
+                    <span id="cadenceBadge" class="cadence-badge">Hourly Cadence</span>
                 </div>
-            </div>
-            <div class="header-action-buttons">
-                <button id="openCustomBizModal" class="btn-secondary">+ Add Custom Business</button>
-                <button id="openUploadCsvModal" class="btn-primary">Upload POS Data</button>
+                <select id="businessSelect" class="custom-select business-dropdown">
+                    <!-- Populated dynamically -->
+                </select>
             </div>
         </div>
 
@@ -109,11 +93,6 @@
                     <div class="metric-label">Total Earned Revenue</div>
                     <div class="metric-number" id="kpiEarned">$0</div>
                     <div class="metric-subtext" id="kpiEarnedSub">Normal expected: $0</div>
-                </div>
-                <div class="metric-grid-card">
-                    <div class="metric-label">Monitored Portfolio</div>
-                    <div class="metric-number" id="kpiUnits">0 Units</div>
-                    <div class="metric-subtext" id="kpiUnitsSub">Market: NYC</div>
                 </div>
                 <div class="metric-grid-card">
                     <div class="metric-label">Past 7-Day Rainfall</div>
@@ -291,6 +270,7 @@
         <div id="tab4" class="tab-pane">
             <div style="margin-bottom: 14px;">
                 <h3 style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;" id="nowcastTitle">Live Weather Intelligence & Business Impact Forecast</h3>
+                <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">Empirical econometric shock simulations across real-world enterprise and municipal datasets under live meteorological conditions.</p>
             </div>
 
             <!-- Live Nowcast Conditions Banner -->
@@ -298,7 +278,7 @@
                 <!-- Populated dynamically -->
             </div>
 
-            <!-- 6 Sector Cards -->
+            <!-- 4 Real Business Shock Cards -->
             <div id="sectorPredictionsGrid" class="sector-grid">
                 <!-- Populated dynamically -->
             </div>
@@ -433,91 +413,6 @@
     </div>
 
     <!-- ============================================================== -->
-    <!-- MODAL 1: ADD CUSTOM BUSINESS -->
-    <!-- ============================================================== -->
-    <div id="customBizModal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3 class="modal-title">+ Add Custom Business Category</h3>
-                <button class="btn-close" id="closeCustomBizModal">&times;</button>
-            </div>
-            <form id="customBizForm">
-                <div class="form-group">
-                    <label for="newBizName">Business Name</label>
-                    <input type="text" id="newBizName" class="form-input" placeholder="e.g., Rooftop Cocktail Lounge or Pet Daycare" required>
-                </div>
-                <div class="form-group">
-                    <label for="newBizCategory">Industry Classification</label>
-                    <select id="newBizCategory" class="custom-select">
-                        <option value="Auto-Detect from Name">Auto-Detect from Name</option>
-                        <option value="Outdoor & Leisure">Outdoor & Leisure</option>
-                        <option value="Indoor Entertainment">Indoor Entertainment</option>
-                        <option value="Home & Emergency Services">Home & Emergency Services</option>
-                        <option value="Health & Wellness">Health & Wellness</option>
-                        <option value="Food & Hospitality">Food & Hospitality</option>
-                        <option value="Retail & Commerce">Retail & Commerce</option>
-                        <option value="Logistics & Transport">Logistics & Transport</option>
-                        <option value="Automotive Care">Automotive Care</option>
-                    </select>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div class="form-group">
-                        <label for="newBizRev">Base Daily Sales ($ USD)</label>
-                        <input type="number" id="newBizRev" class="form-input" value="35000" min="1000" max="500000" step="5000">
-                    </div>
-                    <div class="form-group">
-                        <label for="newBizColor">Accent Color</label>
-                        <input type="color" id="newBizColor" class="form-input" value="#00D2FF" style="height: 38px; padding: 2px;">
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div class="form-group">
-                        <label for="newBizRain">Rain Sensitivity (% per mm)</label>
-                        <input type="number" id="newBizRain" class="form-input" value="0.0" step="0.5" min="-20" max="20">
-                    </div>
-                    <div class="form-group">
-                        <label for="newBizTemp">Heat Sensitivity (% per °C)</label>
-                        <input type="number" id="newBizTemp" class="form-input" value="0.0" step="0.5" min="-15" max="15">
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
-                    <button type="button" class="btn-secondary" id="cancelCustomBiz">Cancel</button>
-                    <button type="submit" class="btn-primary">Synthesize & Add</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- ============================================================== -->
-    <!-- MODAL 2: UPLOAD CSV / EXCEL POS DATA -->
-    <!-- ============================================================== -->
-    <div id="uploadCsvModal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3 class="modal-title">Merchant Data Ingestion</h3>
-                <button class="btn-close" id="closeUploadCsvModal">&times;</button>
-            </div>
-            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">
-                Upload a point-of-sale CSV or Excel export to calibrate empirical weather elasticities on your own store.
-            </p>
-            <form id="uploadCsvForm">
-                <div class="form-group">
-                    <label for="storeName">Store / Merchant Name</label>
-                    <input type="text" id="storeName" class="form-input" value="My Local Store" required>
-                </div>
-                <div class="form-group">
-                    <label for="csvFileInput">Select File (.csv, .xlsx, .xls)</label>
-                    <input type="file" id="csvFileInput" class="form-input" accept=".csv, .xlsx, .xls" required>
-                </div>
-                <div id="uploadStatusText" style="font-size: 0.82rem; margin: 10px 0;"></div>
-                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
-                    <button type="button" class="btn-secondary" id="cancelUploadCsv">Cancel</button>
-                    <button type="submit" class="btn-primary" id="btnSubmitUpload">Run Regression & Add</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- App JavaScript Logic -->
     <script src="/static/js/app.js"></script>
 </body>
