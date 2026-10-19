@@ -28,7 +28,3 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Local Streamlit backup files (kept on system, excluded from git)
-app.py
-.streamlit/
-
