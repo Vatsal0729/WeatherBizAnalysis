@@ -4,6 +4,7 @@ import json
 import time
 import re
 import datetime
+import math
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template, request, jsonify
@@ -13,6 +14,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+from src.historical_dashboard import build_portfolio
 from src.econometrics import WeatherEconometricsEngine
 from src.revenue_analytics import (
     BUSINESS_CATALOG,
@@ -62,6 +64,39 @@ app = Flask(
 )
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+@app.before_request
+def validate_dashboard_request():
+    endpoints = {'initial_state','weather','portfolio_data','domino_data','nowcast','diagnostics'}
+    if request.endpoint not in endpoints:
+        return
+    data = request.args if request.method == 'GET' else request.get_json(silent=True)
+    if data is None or (request.method != 'GET' and not isinstance(data, dict)):
+        return jsonify({'error':'Request body must be a JSON object.'}), 400
+    city = data.get('city','NYC')
+    if not isinstance(city,str) or city not in CITY_NAMES:
+        return jsonify({'error':'city must be one of NYC, ORD, SEA, PHX.'}), 400
+    if request.method == 'GET':
+        return
+    keys = data.get('selected_keys',['nyc_taxi'])
+    if not isinstance(keys,list) or not keys or any(not isinstance(k,str) for k in keys):
+        return jsonify({'error':'selected_keys must be a nonempty array of dataset names.'}), 400
+    if any(k not in get_merged_catalog(city) for k in keys):
+        return jsonify({'error':'Unknown dataset in selected_keys.'}), 400
+    if not isinstance(data.get('custom_businesses',{}),dict):
+        return jsonify({'error':'custom_businesses must be an object.'}), 400
+    if not isinstance(data.get('horizon',''),str):
+        return jsonify({'error':'horizon must be text.'}), 400
+    for field, low, high in [('inspected_day_idx',0,1000000),('sim_dow',0,6),('sim_hour',0,23)]:
+        value = data.get(field)
+        if (field in data and field != 'inspected_day_idx' and value is None) or (value is not None and (type(value) is not int or not low <= value <= high)):
+            return jsonify({'error':f'{field} must be an integer from {low} to {high}.'}), 400
+    for field,low,high in [('sim_rain',0,1000),('sim_wind',0,500),('sim_temp_anom',-100,100)]:
+        if field in data:
+            value = data[field]
+            if type(value) not in (int,float) or not math.isfinite(value) or not low <= value <= high:
+                return jsonify({'error':f'{field} must be a finite number from {low} to {high}.'}), 400
+
 
 # City mapping
 CITY_NAMES = {
@@ -269,76 +304,84 @@ def notebook_walkthrough():
     _, _, assoc = compute_correlation_and_math(taxi_df)
     r_math = assoc.get("rain", {})
     math_report = {
-        "n": r_math.get("n", 744),
-        "x_mean": r_math.get("xmean", 0.12),
-        "y_mean": r_math.get("ymean", 2850.0),
-        "pearson_r": r_math.get("pearson", 0.042),
-        "slope": r_math.get("slope", 18.5),
-        "intercept": r_math.get("intercept", 2840.0),
-        "r_squared": r_math.get("r2", 0.0018),
-        "sxx": r_math.get("sxx", 450.2),
-        "syy": r_math.get("syy", 152000000.0),
-        "sxy": r_math.get("sxy", 8300.0),
-        "covariance": r_math.get("covariance", 11.17)
+        "n": r_math.get("n", 0),
+        "x_mean": r_math.get("xmean", 0),
+        "y_mean": r_math.get("ymean", 0),
+        "pearson_r": r_math.get("pearson", 0),
+        "slope": r_math.get("slope", 0),
+        "intercept": r_math.get("intercept", 0),
+        "r_squared": r_math.get("r2", 0),
+        "sxx": r_math.get("sxx", 0),
+        "syy": r_math.get("syy", 0),
+        "sxy": r_math.get("sxy", 0),
+        "covariance": r_math.get("covariance", 0)
     }
     
+    counts = {key:len(load_real_dataset(key)) for key in REAL_BUSINESS_CATALOG}
+    taxi_numeric = taxi_df['count']
+    q1, q3 = taxi_numeric.quantile([0.25,0.75])
+    iqr = q3-q1
+    flagged = int(((taxi_numeric < q1-1.5*iqr) | (taxi_numeric > q3+1.5*iqr)).sum())
+    matrix = taxi_df[['count','rain_mm','temperature_c','wind_kmh']].corr(method='spearman')
+    model_report = build_portfolio('nyc_taxi','NYC','Full Available History')['impact_model']
     stages = [
         {
-            "number": 1,
-            "title": "Load verified production Parquet datasets",
-            "explanation": "Ingest multi-cadence Parquet tables: hourly NYC Taxi, daily Citi Bike, daily Online Retail, and quarterly Chipotle SEC statements.",
-            "code": "import pandas as pd\n\ntaxi = pd.read_parquet('data/real/nyc_taxi_hourly.parquet')\ncitibike = pd.read_parquet('data/real/citibike_daily.parquet')\nretail = pd.read_parquet('data/real/online_retail_daily.parquet')\nchipotle = pd.read_parquet('data/real/sec_quarterly_restaurants.parquet')\n\nprint('Loaded rows:', len(taxi), len(citibike), len(retail), len(chipotle))",
-            "math": "Shape = (n_observations, k_features)\nMissing_Rate(j) = Σ 𝟙(x_ij is null) / n"
+            'number':1, 'title':'Load current Parquet snapshots',
+            'explanation':'Inspect the current hourly, daily and quarterly source tables.',
+            'code':"from src.real_data_manager import load_real_dataset\nkeys = ['nyc_taxi','citibike_nyc','online_retail','chipotle_sec']\nfor key in keys:\n    print(key, len(load_real_dataset(key)))",
+            'output':'\n'.join(f'{key}: {count:,} rows' for key,count in counts.items()),
+            'math':'Shape = (observations, features)'
         },
         {
-            "number": 2,
-            "title": "Audit raw-to-clean row accounting",
-            "explanation": "Exclusions are transparently logged: negative fares, dock false starts, and cancellation invoices are accounted for.",
-            "code": "# NYC Taxi validation\ntaxi_clean = taxi[(taxi['fare_revenue'] > 0) & (taxi['trip_count'] > 0)].copy()\n\n# Citi Bike validation\ncitibike_clean = citibike[citibike['total_rides'] > 0].copy()\n\nprint('Validated taxi intervals:', len(taxi_clean))\nprint('Validated bike days:', len(citibike_clean))",
-            "math": "Retained Rows = Raw Ingest − Excluded Artifacts\nExclusion reasons must be traceable to declared data pipeline criteria."
+            'number':2, 'title':'Audit current snapshot inventory',
+            'explanation':'Compare current snapshot row counts across the five source groups.',
+            'code':"from src.real_eda_engine import get_raw_to_published_audit\nfor row in get_raw_to_published_audit()['rows']:\n    print(row['source'], row['clean'], row['clean_unit'])",
+            'output':'\n'.join(f"{row['source']}: {row['clean']:,} {row['clean_unit']}" for row in audit['rows']),
+            'math':'Snapshot rows describe the current analytical tables.'
         },
         {
-            "number": 3,
-            "title": "Engineer interpretable weather & calendar features",
-            "explanation": "Derive calendar indicators, temporal cycles, and rainfall intensity bins from local timestamps.",
-            "code": "taxi['hour_of_day'] = pd.to_datetime(taxi['hour']).dt.hour\ntaxi['day_of_week'] = pd.to_datetime(taxi['hour']).dt.dayofweek\ntaxi['is_weekend'] = taxi['day_of_week'].isin([5, 6]).astype(int)\ntaxi['rain_tier'] = pd.cut(taxi['rain_mm'], [-0.001, 0, 1, 5, float('inf')], labels=['Dry', 'Light', 'Moderate', 'Heavy'])",
-            "math": "day_of_week = DayOfWeek(timestamp_local)\nrain_group = Interval(rain_mm)\nweekend_indicator = 𝟙(day_of_week ≥ 5)"
+            'number':3, 'title':'Engineer interpretable weather & calendar features',
+            'explanation':'Use the same feature builder as the EDA presentation.',
+            'code':"from src.real_eda_engine import get_matched_series_data\ntaxi = get_matched_series_data('nyc_taxi')\nprint(taxi[['date','count','rain_mm','temperature_c','weekday','weather_estimated']].head().to_string(index=False))",
+            'output':taxi_df[['date','count','rain_mm','temperature_c','weekday','weather_estimated']].head().to_string(index=False),
+            'math':'weekday = day of week of the local observation date'
         },
         {
-            "number": 4,
-            "title": "Compute descriptive distribution statistics & Tukey fences",
-            "explanation": "Measure central tendency, spread, and tail thickness using mean, median, IQR, skewness, and excess kurtosis.",
-            "code": "q1 = taxi['trip_count'].quantile(0.25)\nq3 = taxi['trip_count'].quantile(0.75)\niqr = q3 - q1\nlower_fence = q1 - 1.5 * iqr\nupper_fence = q3 + 1.5 * iqr\noutliers = taxi[(taxi['trip_count'] < lower_fence) | (taxi['trip_count'] > upper_fence)]\n\nprint(f'IQR: {iqr:.1f}, Outliers flagged: {len(outliers)}')",
-            "math": "x̄ = (1/n) Σ x_i\nIQR = Q₃ − Q₁\nLower Fence = Q₁ − 1.5×IQR; Upper Fence = Q₃ + 1.5×IQR\nSkewness = [n / ((n-1)(n-2))] Σ ((x_i − x̄) / s)³"
+            'number':4, 'title':'Compute descriptive distribution statistics & Tukey fences',
+            'explanation':'Calculate spread and flag extreme observations without deleting them.',
+            'code':"q1, q3 = taxi['count'].quantile([0.25,0.75])\niqr = q3-q1\nflagged = ((taxi['count'] < q1-1.5*iqr) | (taxi['count'] > q3+1.5*iqr)).sum()\nprint(f'IQR: {iqr:.1f}; flagged: {flagged}')",
+            'output':f'IQR: {iqr:.1f}; flagged: {flagged}',
+            'math':'IQR = Q3 - Q1; Tukey fences = Q1 - 1.5 IQR, Q3 + 1.5 IQR'
         },
         {
-            "number": 5,
-            "title": "Spearman rank monotonic correlation matrix",
-            "explanation": "Compute non-parametric rank correlation to handle zero-precipitation tied observations appropriately.",
-            "code": "cols = ['trip_count', 'rain_mm', 'temperature_c', 'wind_kmh']\nspearman_matrix = taxi[cols].corr(method='spearman')\nprint(spearman_matrix.round(3))",
-            "math": "R_i = Rank(x_i), Q_i = Rank(y_i)\nSpearman ρ = PearsonCorrelation(R, Q)\nTied zero-rain values are assigned average fractional ranks."
+            'number':5, 'title':'Spearman rank monotonic correlation matrix',
+            'explanation':'Compare ranks while accounting for tied values.',
+            'code':"cols = ['count','rain_mm','temperature_c','wind_kmh']\nprint(taxi[cols].corr(method='spearman').round(3).to_string())",
+            'output':matrix.round(3).to_string(),
+            'math':'Spearman rho = Pearson correlation of average ranks'
         },
         {
-            "number": 6,
-            "title": "Reproduce Pearson and OLS mathematics",
-            "explanation": "Step-by-step verification comparing pandas correlation against closed-form analytical formulas.",
-            "code": "x = taxi['rain_mm'].values\ny = taxi['trip_count'].values\nn = len(x)\nx_bar, y_bar = x.mean(), y.mean()\nsxx = ((x - x_bar)**2).sum()\nsyy = ((y - y_bar)**2).sum()\nsxy = ((x - x_bar) * (y - y_bar)).sum()\n\npearson_r = sxy / (sxx * syy)**0.5\nslope_b1 = sxy / sxx\nintercept_b0 = y_bar - slope_b1 * x_bar\nr_squared = pearson_r**2",
-            "math": "Sxx = Σ(x_i − x̄)²; Syy = Σ(y_i − ȳ)²; Sxy = Σ(x_i − x̄)(y_i − ȳ)\nr = Sxy / √(Sxx · Syy)\nb₁ = Sxy / Sxx; b₀ = ȳ − b₁x̄; R² = r²"
+            'number':6, 'title':'Reproduce Pearson and OLS mathematics',
+            'explanation':'The displayed mathematics use the same paired rows as the EDA.',
+            'code':"from src.real_eda_engine import compute_correlation_and_math\n_, _, association = compute_correlation_and_math(taxi)\nresult = association['rain']\nprint({k:result[k] for k in ['n','pearson','slope','intercept','r2']})",
+            'output':str({k:r_math[k] for k in ['n','pearson','slope','intercept','r2']}),
+            'math':'r = Sxy / sqrt(Sxx Syy); slope = Sxy / Sxx; intercept = mean(y) - slope * mean(x)'
         },
         {
-            "number": 7,
-            "title": "Fit Econometric Two-Way Fixed Effects (TWFE) Regressions",
-            "explanation": "Remove calendar and seasonal confounders to estimate genuine weather demand elasticities with HAC standard errors.",
-            "code": "import statsmodels.api as sm\nimport numpy as np\n\ny = np.log1p(taxi['trip_count'])\nX = sm.add_constant(taxi[['rain_mm', 'temperature_c', 'wind_kmh']])\n\n# OLS with HAC Newey-West standard errors (7 lags)\nmodel = sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags': 7})\nprint(model.summary().tables[1])",
-            "math": "log(1 + y_it) = α_i + γ_t + β₁ log(1 + rain_it) + β₂ temp_it + β₃ wind_it + ε_it\nVar(β̂) uses Newey-West HAC covariance matrix robust to autocorrelation."
+            'number':7, 'title':'Inspect the dashboard association model',
+            'explanation':'Inspect the actual daily-revenue model used by the executive dashboard.',
+            'code':"from src.historical_dashboard import build_portfolio\nreport = build_portfolio('nyc_taxi','NYC','Full Available History')['impact_model']\nprint(report)",
+            'output':json.dumps(model_report,indent=2),
+            'math':'Daily revenue = intercept + rain + temperature + wind + calendar controls + time trend (+ snow when variable). OLS with HC3 covariance; in-sample association.'
         }
     ]
-    
+
     return render_template(
         "notebook.html",
         audit=audit,
         math_report=math_report,
-        stages=stages
+        stages=stages,
+        dataset_counts=counts
     )
 
 @app.route("/api/initial-state")
@@ -404,416 +447,11 @@ def portfolio_data():
     city_daily_custom = calculate_custom_business_daily_series(city_daily, valid_keys, custom_catalog=active_catalog)
     past_week = city_daily_custom.tail(7).copy().reset_index(drop=True)
 
-    if primary_key == "chipotle_sec":
-        df_sec = load_real_dataset("chipotle_sec")
-        q_tail = df_sec.tail(8).copy().reset_index(drop=True)
-        x_labels_7d = [f"{r['quarter_label']}<br>{pd.to_datetime(r['end']).strftime('%b %Y')}" for _, r in q_tail.iterrows()]
-        dates_7d = [str(r['end']) for _, r in q_tail.iterrows()]
-        days_7d = [r['quarter_label'] for _, r in q_tail.iterrows()]
-        weather_icons_7d = ["SEC 10-Q" for _ in range(len(q_tail))]
-        temp_series_7d = [16.0] * len(q_tail)
-        quarter_rain_map = {"Q1": 265.0, "Q2": 310.0, "Q3": 295.0, "Q4": 280.0}
-        rain_series_7d = [quarter_rain_map.get(str(r.get("fp", "Q1")), 285.0) for _, r in q_tail.iterrows()]
-        actual_rev = [round(float(v), 2) for v in q_tail["revenue_usd"]]
-        baseline_rev = [round(float(v) * (0.985 if i % 2 == 0 else 1.015), 2) for i, v in enumerate(actual_rev)]
-        net_impact = [round(a - b, 2) for a, b in zip(actual_rev, baseline_rev)]
-        business_series_7d = [{
-            "key": "chipotle_sec",
-            "name": "Chipotle Mexican Grill (SEC 10-Q)",
-            "clean_label": "Chipotle Mexican Grill",
-            "color": "#F59E0B",
-            "symbol": "star",
-            "actual": actual_rev,
-            "baseline": baseline_rev,
-            "net_impact": net_impact
-        }]
-        total_week_actual = actual_rev[-1]
-        total_week_base = baseline_rev[-1]
-        total_week_impact = net_impact[-1]
-        total_rain_week = float(rain_series_7d[-1])
-
-        if inspected_day_idx is None or inspected_day_idx < 0 or inspected_day_idx >= len(q_tail):
-            inspected_day_idx = len(q_tail) - 1
-        day_idx = inspected_day_idx
-        chosen_row = q_tail.iloc[day_idx]
-
-        hourly_records = []
-        for idx, r in q_tail.iterrows():
-            hourly_records.append({
-                "num": idx + 1,
-                "time": f"Quarter {r['quarter_label']}",
-                "temp": 16.5,
-                "rain": float(quarter_rain_map.get(str(r.get("fp", "Q1")), 285.0)),
-                "food_orders": f"${float(r['revenue_usd'])/1e9:.2f}B Revenue",
-                "price_surge": "SEC 10-Q",
-                "wait_time": "10-Q Filing",
-                "bike_trips": 3400,
-                "traffic_jam": "+12.8% YoY"
-            })
-        day_insights = [{
-            "name": "Chipotle Mexican Grill (SEC 10-Q)",
-            "b_name": "Chipotle Mexican Grill (SEC 10-Q)",
-            "color": "#F59E0B",
-            "delta": net_impact[day_idx],
-            "actual_rev": actual_rev[day_idx],
-            "baseline_rev": baseline_rev[day_idx],
-            "pct_change": ((actual_rev[day_idx] - baseline_rev[day_idx]) / baseline_rev[day_idx] * 100) if baseline_rev[day_idx] else 0.0,
-            "headline": f"Quarterly Net Revenue: ${actual_rev[day_idx]/1e9:.2f} Billion (SEC 10-Q {chosen_row['quarter_label']})",
-            "trigger": f"Official SEC 10-Q Quarterly Filing Telemetry ({chosen_row['quarter_label']})",
-            "reaction": "Extreme cold and spring precipitation events historically suppress dine-in floor foot traffic, with digital channels capturing ~65% of demand substitution.",
-            "financial": f"Reported Net Revenue: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Weather Variance: {net_impact[day_idx]:+,.0f})",
-            "linkage": "Quarterly weather drag in winter quarters typically reverses into robust seasonal tailwinds during Q2 & Q3 patio and summer dining peaks.",
-            "guidance": "Incorporate multi-week meteorological forecast trends into forward corporate earnings expectations and regional produce supply chains.",
-            "bullets": [
-                f"Official SEC 10-Q quarterly telemetry disclosure for {chosen_row['quarter_label']}",
-                "Extreme cold and precipitation suppress dine-in foot traffic, shifting demand to digital delivery channels (~65% mix)",
-                f"Reported Net Revenue: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Weather Variance: {net_impact[day_idx]:+,.0f})",
-                "Incorporate meteorological forecast trends into forward corporate earnings expectations"
-            ],
-            "category": "Public Fast-Casual Chain"
-        }]
-        day_row = {
-            "date_str": str(chosen_row["end"]),
-            "day_name": str(chosen_row["quarter_label"]),
-            "weather_icon": "SEC Filing",
-            "air_temp_deg_c": 16.5,
-            "precip_accumulation_mm": rain_series_7d[day_idx]
-        }
-
-        # Historical Horizon Slicing for Tab 2
-        if "1 Year" in horizon or "4 Quarters" in horizon or "3 Months" in horizon:
-            h_df = df_sec.tail(4).copy().reset_index(drop=True)
-        elif "2 Years" in horizon or "8 Quarters" in horizon or "6 Months" in horizon:
-            h_df = df_sec.tail(8).copy().reset_index(drop=True)
-        else:
-            h_df = df_sec.copy().reset_index(drop=True)
-
-        h_actual = [round(float(v), 2) for v in h_df["revenue_usd"]]
-        h_baseline = [round(float(v) * (0.985 if i % 2 == 0 else 1.015), 2) for i, v in enumerate(h_actual)]
-        weekly_dates = [str(r['end']) for _, r in h_df.iterrows()]
-        weekly_lt = pd.DataFrame({
-            "date_display": [r['quarter_label'] for _, r in h_df.iterrows()]
-        })
-        weekly_rain = [quarter_rain_map.get(str(r.get("fp", "Q1")), 285.0) for _, r in h_df.iterrows()]
-        weekly_temp = [16.5] * len(h_df)
-        historical_series = [{
-            "key": "chipotle_sec",
-            "name": "Chipotle Mexican Grill (SEC 10-Q)",
-            "clean_label": "Chipotle Mexican Grill",
-            "color": "#F59E0B",
-            "symbol": "star",
-            "actual": h_actual,
-            "baseline": h_baseline
-        }]
-
-    elif primary_key == "nyc_taxi":
-        df_taxi = load_real_dataset("nyc_taxi")
-        df_taxi["date_dt"] = pd.to_datetime(df_taxi["hour"]).dt.date
-        taxi_daily = df_taxi.groupby("date_dt").agg(
-            total_revenue=("total_revenue", "sum"),
-            trip_count=("trip_count", "sum"),
-            avg_fare=("avg_fare", "mean")
-        ).reset_index()
-        t_tail = taxi_daily.tail(7).copy().reset_index(drop=True)
-        x_labels_7d = [pd.to_datetime(d).strftime('%a<br>%b %d') for d in t_tail["date_dt"]]
-        dates_7d = [str(d) for d in t_tail["date_dt"]]
-        days_7d = [pd.to_datetime(d).strftime('%a') for d in t_tail["date_dt"]]
-        weather_icons_7d = past_week["weather_icon"].tolist()
-        temp_series_7d = past_week["air_temp_deg_c"].tolist()
-        rain_series_7d = past_week["precip_accumulation_mm"].tolist()
-        actual_rev = [round(float(v), 2) for v in t_tail["total_revenue"]]
-        baseline_rev = [round(float(v) * (0.94 if rain_series_7d[i] > 1.0 else 1.02), 2) for i, v in enumerate(actual_rev)]
-        net_impact = [round(a - b, 2) for a, b in zip(actual_rev, baseline_rev)]
-        business_series_7d = [{
-            "key": "nyc_taxi",
-            "name": "NYC Yellow Taxi & Rideshare Fleet",
-            "clean_label": "NYC Yellow Taxi",
-            "color": "#00E676",
-            "symbol": "circle",
-            "actual": actual_rev,
-            "baseline": baseline_rev,
-            "net_impact": net_impact
-        }]
-        total_week_actual = sum(actual_rev)
-        total_week_base = sum(baseline_rev)
-        total_week_impact = total_week_actual - total_week_base
-        total_rain_week = float(past_week["precip_accumulation_mm"].sum())
-
-        if inspected_day_idx is None or inspected_day_idx < 0 or inspected_day_idx >= len(t_tail):
-            inspected_day_idx = len(t_tail) - 1
-        day_idx = inspected_day_idx
-        chosen_date = t_tail.iloc[day_idx]["date_dt"]
-
-        # Filter hourly table specifically for the selected date
-        h_slice = df_taxi[df_taxi["date_dt"] == chosen_date].sort_values("hour").reset_index(drop=True)
-        if h_slice.empty:
-            h_slice = df_taxi.tail(24).reset_index(drop=True)
-
-        hourly_records = []
-        for idx, r in h_slice.iterrows():
-            hourly_records.append({
-                "num": idx + 1,
-                "time": pd.to_datetime(r["hour"]).strftime("%H:00"),
-                "temp": round(float(temp_series_7d[day_idx] + ((idx % 5) - 2)), 1),
-                "rain": round(float(rain_series_7d[day_idx] / 4.0 if idx in [17, 18, 19, 20] else 0.0), 1),
-                "food_orders": f"{int(r['trip_count']):,} Trips",
-                "price_surge": f"${float(r['avg_fare']):.2f} Avg",
-                "wait_time": f"${float(r['total_revenue']):,.0f}",
-                "bike_trips": int(r['trip_count']),
-                "traffic_jam": "NYC TLC"
-            })
-        day_insights = [{
-            "name": "NYC Yellow Taxi & Rideshare Fleet",
-            "b_name": "NYC Yellow Taxi & Rideshare Fleet",
-            "color": "#00E676",
-            "delta": net_impact[day_idx],
-            "actual_rev": actual_rev[day_idx],
-            "baseline_rev": baseline_rev[day_idx],
-            "pct_change": ((actual_rev[day_idx] - baseline_rev[day_idx]) / baseline_rev[day_idx] * 100) if baseline_rev[day_idx] else 0.0,
-            "headline": f"Daily Fares: ${actual_rev[day_idx]:,.0f} ({t_tail.iloc[day_idx]['trip_count']:,} Trips on {chosen_date})",
-            "trigger": f"Precipitation ({rain_series_7d[day_idx]} mm) and transit demand across NYC on {days_7d[day_idx]} ({chosen_date})",
-            "reaction": "Pedestrians avoid wet sidewalks and outdoor transit stops, hailing street cabs immediately." if rain_series_7d[day_idx] > 0 else "Clear conditions sustained standard street hail velocity and routine baseline transit patterns.",
-            "financial": f"Gross Fares: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Shift: {net_impact[day_idx]:+,.0f})",
-            "linkage": "Rainfall triggers a +15% to +35% surge in street hails, congestion surcharges, and driver tipping.",
-            "guidance": "Position fleet vehicles in dense commercial corridors and midtown subway hubs ahead of rain arrival.",
-            "bullets": [
-                f"NYC TLC Municipal Trip Telemetry for {chosen_date}",
-                "Pedestrians avoid wet sidewalks and hail street cabs immediately" if rain_series_7d[day_idx] > 0 else "Normal transit flow on clear streets across Manhattan corridors",
-                f"Gross Fares: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Shift: {net_impact[day_idx]:+,.0f})",
-                "Position fleet vehicles in dense commercial corridors and midtown subway hubs ahead of rain arrival"
-            ],
-            "category": "Urban Mobility"
-        }]
-        day_row = {
-            "date_str": dates_7d[day_idx],
-            "day_name": days_7d[day_idx],
-            "weather_icon": weather_icons_7d[day_idx],
-            "air_temp_deg_c": temp_series_7d[day_idx],
-            "precip_accumulation_mm": rain_series_7d[day_idx]
-        }
-
-        # Historical Horizon Slicing for Tab 2
-        if "7 Days" in horizon or "1 Week" in horizon:
-            h_df = taxi_daily.tail(7).copy().reset_index(drop=True)
-        elif "14 Days" in horizon or "2 Weeks" in horizon:
-            h_df = taxi_daily.tail(14).copy().reset_index(drop=True)
-        else:
-            h_df = taxi_daily.copy().reset_index(drop=True)
-
-        weekly_dates = [str(d) for d in h_df["date_dt"]]
-        weekly_lt = pd.DataFrame({
-            "date_display": [pd.to_datetime(d).strftime("%b %d, %Y") for d in h_df["date_dt"]]
-        })
-        weekly_rain = [rain_series_7d[i % len(rain_series_7d)] for i in range(len(h_df))]
-        weekly_temp = [temp_series_7d[i % len(temp_series_7d)] for i in range(len(h_df))]
-        historical_series = [{
-            "key": "nyc_taxi",
-            "name": "NYC Yellow Taxi & Rideshare",
-            "clean_label": "NYC Yellow Taxi",
-            "color": "#00E676",
-            "symbol": "circle",
-            "actual": h_df["total_revenue"].tolist(),
-            "baseline": [round(v * 0.96, 2) for v in h_df["total_revenue"]]
-        }]
-
-    elif primary_key == "citibike_nyc":
-        df_citi = load_real_dataset("citibike_nyc")
-        c_tail = df_citi.tail(7).copy().reset_index(drop=True)
-        x_labels_7d = [pd.to_datetime(d).strftime('%a<br>%b %d') for d in c_tail["date"]]
-        dates_7d = [str(d) for d in c_tail["date"]]
-        days_7d = [pd.to_datetime(d).strftime('%a') for d in c_tail["date"]]
-        weather_icons_7d = past_week["weather_icon"].tolist()
-        temp_series_7d = past_week["air_temp_deg_c"].tolist()
-        rain_series_7d = past_week["precip_accumulation_mm"].tolist()
-        actual_rev = [round(float(v), 2) for v in c_tail["estimated_revenue_usd"]]
-        baseline_rev = [round(float(v) * (1.18 if rain_series_7d[i] > 1.0 else 0.98), 2) for i, v in enumerate(actual_rev)]
-        net_impact = [round(a - b, 2) for a, b in zip(actual_rev, baseline_rev)]
-        business_series_7d = [{
-            "key": "citibike_nyc",
-            "name": "Citi Bike NYC Micromobility",
-            "clean_label": "Citi Bike NYC",
-            "color": "#38BDF8",
-            "symbol": "diamond",
-            "actual": actual_rev,
-            "baseline": baseline_rev,
-            "net_impact": net_impact
-        }]
-        total_week_actual = sum(actual_rev)
-        total_week_base = sum(baseline_rev)
-        total_week_impact = total_week_actual - total_week_base
-        total_rain_week = float(past_week["precip_accumulation_mm"].sum())
-
-        if inspected_day_idx is None or inspected_day_idx < 0 or inspected_day_idx >= len(c_tail):
-            inspected_day_idx = len(c_tail) - 1
-        day_idx = inspected_day_idx
-        chosen_row = c_tail.iloc[day_idx]
-
-        hourly_records = []
-        for idx, r in c_tail.iterrows():
-            hourly_records.append({
-                "num": idx + 1,
-                "time": f"{r['date']} ({'Selected' if idx == day_idx else 'Observation'})",
-                "temp": round(float(temp_series_7d[idx % len(temp_series_7d)]), 1),
-                "rain": round(float(rain_series_7d[idx % len(rain_series_7d)]), 1),
-                "food_orders": f"{int(r['total_rides']):,} Rides",
-                "price_surge": f"{int(r['member_rides']):,} Mem",
-                "wait_time": f"{float(r['avg_duration_min']):.1f} min",
-                "bike_trips": int(r['total_rides']),
-                "traffic_jam": f"${float(r['estimated_revenue_usd']):,.0f}"
-            })
-        day_insights = [{
-            "name": "Citi Bike NYC Micromobility",
-            "b_name": "Citi Bike NYC Micromobility",
-            "color": "#38BDF8",
-            "delta": net_impact[day_idx],
-            "actual_rev": actual_rev[day_idx],
-            "baseline_rev": baseline_rev[day_idx],
-            "pct_change": ((actual_rev[day_idx] - baseline_rev[day_idx]) / baseline_rev[day_idx] * 100) if baseline_rev[day_idx] else 0.0,
-            "headline": f"Daily Completed Rides: {chosen_row['total_rides']:,} (${actual_rev[day_idx]:,.0f} Rev on {dates_7d[day_idx]})",
-            "trigger": f"Atmospheric conditions ({rain_series_7d[day_idx]} mm rain, {temp_series_7d[day_idx]}°C) on {days_7d[day_idx]}",
-            "reaction": "Freezing temperatures and active rainfall suppress outdoor cycling by up to -75%, diverting rides into subways and taxis." if rain_series_7d[day_idx] > 0 else "Mild conditions support high commuter cycling volume across bikeshare stations.",
-            "financial": f"Estimated Revenue: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Shift: {net_impact[day_idx]:+,.0f})",
-            "linkage": "Inverse substitution directly counter-balances taxi and rideshare demand surges during wet weather.",
-            "guidance": "Schedule bike rebalancing and battery swap logistics during rainy downtime intervals.",
-            "bullets": [
-                f"Citi Bike NYC Public System Telemetry for {dates_7d[day_idx]}",
-                f"Completed Rides: {chosen_row['total_rides']:,} (Members: {chosen_row['member_rides']:,}, Casual: {chosen_row['casual_rides']:,})",
-                f"Estimated Revenue: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Shift: {net_impact[day_idx]:+,.0f})",
-                "Schedule bike rebalancing and battery swap logistics during rainy downtime intervals"
-            ],
-            "category": "Micromobility"
-        }]
-        day_row = {
-            "date_str": dates_7d[day_idx],
-            "day_name": days_7d[day_idx],
-            "weather_icon": weather_icons_7d[day_idx],
-            "air_temp_deg_c": temp_series_7d[day_idx],
-            "precip_accumulation_mm": rain_series_7d[day_idx]
-        }
-
-        # Historical Horizon Slicing for Tab 2
-        if "30 Days" in horizon or "1 Month" in horizon:
-            h_df = df_citi.tail(30).copy().reset_index(drop=True)
-        elif "90 Days" in horizon or "3 Months" in horizon:
-            h_df = df_citi.tail(90).copy().reset_index(drop=True)
-        else:
-            h_df = df_citi.copy().reset_index(drop=True)
-
-        weekly_dates = [str(d) for d in h_df["date"]]
-        weekly_lt = pd.DataFrame({
-            "date_display": [pd.to_datetime(d).strftime("%b %d, %Y") for d in h_df["date"]]
-        })
-        weekly_rain = [rain_series_7d[i % len(rain_series_7d)] for i in range(len(h_df))]
-        weekly_temp = [temp_series_7d[i % len(temp_series_7d)] for i in range(len(h_df))]
-        historical_series = [{
-            "key": "citibike_nyc",
-            "name": "Citi Bike NYC",
-            "clean_label": "Citi Bike NYC",
-            "color": "#38BDF8",
-            "symbol": "diamond",
-            "actual": h_df["estimated_revenue_usd"].tolist(),
-            "baseline": [round(v * 1.05, 2) for v in h_df["estimated_revenue_usd"]]
-        }]
-
-    elif primary_key == "online_retail":
-        df_ret = load_real_dataset("online_retail")
-        r_tail = df_ret.tail(7).copy().reset_index(drop=True)
-        x_labels_7d = [pd.to_datetime(d).strftime('%a<br>%b %d') for d in r_tail["date"]]
-        dates_7d = [str(d) for d in r_tail["date"]]
-        days_7d = [pd.to_datetime(d).strftime('%a') for d in r_tail["date"]]
-        weather_icons_7d = past_week["weather_icon"].tolist()
-        temp_series_7d = past_week["air_temp_deg_c"].tolist()
-        rain_series_7d = past_week["precip_accumulation_mm"].tolist()
-        actual_rev = [round(float(v), 2) for v in r_tail["daily_revenue"]]
-        baseline_rev = [round(float(v) * (0.96 if rain_series_7d[i] > 1.0 else 1.02), 2) for i, v in enumerate(actual_rev)]
-        net_impact = [round(a - b, 2) for a, b in zip(actual_rev, baseline_rev)]
-        business_series_7d = [{
-            "key": "online_retail",
-            "name": "E-Commerce & Online Retail Store",
-            "clean_label": "Online Retail Store",
-            "color": "#B388FF",
-            "symbol": "square",
-            "actual": actual_rev,
-            "baseline": baseline_rev,
-            "net_impact": net_impact
-        }]
-        total_week_actual = sum(actual_rev)
-        total_week_base = sum(baseline_rev)
-        total_week_impact = total_week_actual - total_week_base
-        total_rain_week = float(past_week["precip_accumulation_mm"].sum())
-
-        if inspected_day_idx is None or inspected_day_idx < 0 or inspected_day_idx >= len(r_tail):
-            inspected_day_idx = len(r_tail) - 1
-        day_idx = inspected_day_idx
-        chosen_row = r_tail.iloc[day_idx]
-
-        hourly_records = []
-        for idx, r in r_tail.iterrows():
-            hourly_records.append({
-                "num": idx + 1,
-                "time": f"{r['date']} ({'Selected' if idx == day_idx else 'Observation'})",
-                "temp": round(float(temp_series_7d[idx % len(temp_series_7d)]), 1),
-                "rain": round(float(rain_series_7d[idx % len(rain_series_7d)]), 1),
-                "food_orders": f"{int(r['order_count']):,} Orders",
-                "price_surge": f"{int(r['items_sold']):,} Items",
-                "wait_time": f"${float(r['avg_order_value']):.2f} AOV",
-                "bike_trips": int(r['order_count']),
-                "traffic_jam": f"${float(r['daily_revenue']):,.0f}"
-            })
-        day_insights = [{
-            "name": "E-Commerce & Online Retail Store",
-            "b_name": "E-Commerce & Online Retail Store",
-            "color": "#B388FF",
-            "delta": net_impact[day_idx],
-            "actual_rev": actual_rev[day_idx],
-            "baseline_rev": baseline_rev[day_idx],
-            "pct_change": ((actual_rev[day_idx] - baseline_rev[day_idx]) / baseline_rev[day_idx] * 100) if baseline_rev[day_idx] else 0.0,
-            "headline": f"Daily Orders: {chosen_row['order_count']:,} (${actual_rev[day_idx]:,.0f} Revenue on {dates_7d[day_idx]})",
-            "trigger": f"Inclement weather and indoor retail behavior on {days_7d[day_idx]} ({rain_series_7d[day_idx]} mm rain)",
-            "reaction": "Wet and cold weather drives consumers indoors, increasing online shopping cart sessions and orders.",
-            "financial": f"Actual Revenue: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Shift: {net_impact[day_idx]:+,.0f})",
-            "linkage": "Rainfall events typically drive a +10% to +25% lift in e-commerce checkout frequency.",
-            "guidance": "Coordinate automated promotional email and push notifications during rainy afternoons to capture browsing spikes.",
-            "bullets": [
-                f"UCI Commercial Online Retail Transaction History for {dates_7d[day_idx]}",
-                f"Processed {chosen_row['order_count']:,} orders with {chosen_row['items_sold']:,} items sold",
-                f"Actual Revenue: ${actual_rev[day_idx]:,.0f} vs Baseline: ${baseline_rev[day_idx]:,.0f} (Net Shift: {net_impact[day_idx]:+,.0f})",
-                "Coordinate automated promotional email and push notifications during rainy afternoons"
-            ],
-            "category": "Commercial Retail"
-        }]
-        day_row = {
-            "date_str": dates_7d[day_idx],
-            "day_name": days_7d[day_idx],
-            "weather_icon": weather_icons_7d[day_idx],
-            "air_temp_deg_c": temp_series_7d[day_idx],
-            "precip_accumulation_mm": rain_series_7d[day_idx]
-        }
-
-        # Historical Horizon Slicing for Tab 2
-        if "3 Months" in horizon or "90 Days" in horizon:
-            h_df = df_ret.tail(90).copy().reset_index(drop=True)
-        elif "6 Months" in horizon or "180 Days" in horizon:
-            h_df = df_ret.tail(180).copy().reset_index(drop=True)
-        else:
-            h_df = df_ret.copy().reset_index(drop=True)
-
-        weekly_dates = [str(d) for d in h_df["date"]]
-        weekly_lt = pd.DataFrame({
-            "date_display": [pd.to_datetime(d).strftime("%b %d, %Y") for d in h_df["date"]]
-        })
-        weekly_rain = [rain_series_7d[i % len(rain_series_7d)] for i in range(len(h_df))]
-        weekly_temp = [temp_series_7d[i % len(temp_series_7d)] for i in range(len(h_df))]
-        historical_series = [{
-            "key": "online_retail",
-            "name": "Online Retail Store",
-            "clean_label": "Online Retail Store",
-            "color": "#B388FF",
-            "symbol": "square",
-            "actual": h_df["daily_revenue"].tolist(),
-            "baseline": [round(v * 0.98, 2) for v in h_df["daily_revenue"]]
-        }]
-
+    if is_real:
+        try:
+            return jsonify(build_portfolio(primary_key, city, horizon, inspected_day_idx))
+        except ValueError as exc:
+            return jsonify({'error':str(exc)}), 503
     else:
         # Standard synthetic or merchant model
         total_week_actual = sum(past_week[f"{k}_actual_rev"].sum() for k in valid_keys if f"{k}_actual_rev" in past_week)

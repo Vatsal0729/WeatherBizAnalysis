@@ -1,0 +1,53 @@
+{
+  "nyc_taxi_hourly.parquet": {
+    "periods": {
+      "2026-08": {
+        "urls": [
+          "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2026-08.parquet"
+        ],
+        "sha256": [
+          "6683a025443afcbb28ac4f238fcbb6334767dc69fab4a16b1eb16a78dcd013cd"
+        ],
+        "downloaded_at": "2026-10-19T17:00:18.026807+00:00"
+      }
+    },
+    "updated_at": "2026-10-19T17:00:18.026807+00:00",
+    "rows": 1488,
+    "first": "2023-01-01 00:00:00",
+    "last": "2026-08-31 23:00:00"
+  },
+  "nyc_weather_hourly.parquet": {
+    "periods": {
+      "quarterly": {
+        "urls": [
+          "https://archive-api.open-meteo.com/v1/archive?latitude=40.7128&longitude=-74.0060&start_date=2023-01-01&end_date=2026-08-31&hourly=temperature_2m,precipitation,wind_speed_10m,snowfall&timezone=America%2FNew_York"
+        ],
+        "sha256": [
+          "2f880e334c75e772f6f86b65fda269309da5a9d6e9e00e62afa89c25a0401950"
+        ],
+        "downloaded_at": "2026-10-19T17:03:39.300853+00:00"
+      }
+    },
+    "updated_at": "2026-10-19T17:03:39.300853+00:00",
+    "rows": 32136,
+    "first": "2023-01-01 00:00:00",
+    "last": "2026-08-31 23:00:00"
+  },
+  "retail_weather_daily.parquet": {
+    "periods": {
+      "quarterly": {
+        "urls": [
+          "https://archive-api.open-meteo.com/v1/archive?latitude=51.5074&longitude=-0.1278&start_date=2010-12-01&end_date=2011-12-09&daily=temperature_2m_mean,precipitation_sum,snowfall_sum,wind_speed_10m_mean&timezone=Europe%2FLondon"
+        ],
+        "sha256": [
+          "c018d69eb234e95332608c93366085e5ff8f5a52f744654ec20615bb8ab9ec72"
+        ],
+        "downloaded_at": "2026-10-19T17:23:47.078124+00:00"
+      }
+    },
+    "updated_at": "2026-10-19T17:23:47.078124+00:00",
+    "rows": 374,
+    "first": "2010-12-01 00:00:00",
+    "last": "2011-12-09 00:00:00"
+  }
+}

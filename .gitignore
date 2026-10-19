@@ -28,3 +28,7 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+
+# Refresh scratch and recovery copies
+work/
+*.parquet.bak

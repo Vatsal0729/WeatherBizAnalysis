@@ -12,6 +12,29 @@ An enterprise analytics platform that measures, isolates, and forecasts the real
 
 ---
 
+## Dataset refreshes
+
+Run from this project directory:
+
+```powershell
+python -m src.refresh_data --source taxi
+python -m src.refresh_data --source citibike
+python -m src.refresh_data --source weather
+# SEC requires your real identification/contact (not an API key):
+$env:SEC_USER_AGENT = "Your Name your-email@example.com"
+python -m src.refresh_data --source sec
+```
+
+A daily 09:00 Asia/Kolkata refresh check is configured in the Codex chat automation. Its execution depends on the local automation being available; this is not a server-side scheduler. Configure SEC_USER_AGENT in the environment used by that automation to enable SEC updates. No contact email has been invented or configured for you.
+
+The monthly import discovers the latest published NYC yellow-taxi/Citi Bike month, keeps older rows, and replaces duplicate periods. Initial setup imports the latest month only: gaps between the legacy snapshot and latest data are NOT backfilled automatically. Use `--month YYYY-MM` to import specific missing months. Citi Bike uses modern started_at/ended_at/member_casual CSVs; pre-2024 annual ZIP archives are not supported. Downloads may be large. Only one updater should run at a time.
+
+`data/real/refresh_manifest.json` records imported periods, source URLs, download SHA-256 hashes, row counts and coverage. Existing rows retained from legacy files are not authenticated by a new period's provenance. Files are replaced atomically after aggregation, with the previous dataset in `.parquet.bak`. Download failures leave the affected dataset unchanged; sources update independently. The website's business-data cache reloads files when their modification time changes. Restart an already running website once after installing this code.
+
+NYC EDA uses downloaded Open-Meteo historical reanalysis weather when present, aligned to New York local time. The original executive scenario models remain illustrative and are not retrained by this updater. Retail is a fixed historical UCI snapshot. Retail now has a labelled London regional weather proxy; Chipotle has no matched weather import. The retail proxy is excluded from store-level weather-impact estimation. Citi Bike revenue is an estimate using assumed member/casual fares ($3.50/$6.50 per ride), not reported revenue. SEC imports standalone 70–105-day quarterly facts, uses calendar period labels, and excludes annual/YTD figures; Q4 is included only when a standalone fact exists. UCI has no ongoing feed.
+
+Official source documentation: [TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page), [Citi Bike](https://citibikenyc.com/system-data), [SEC](https://www.sec.gov/search-filings/edgar-application-programming-interfaces), [Open-Meteo](https://open-meteo.com/en/docs/historical-weather-api).
+
 ## 🌟 Platform Interfaces
 
 The repository provides a dual presentation architecture designed for both executive decision-makers and academic peer review:
@@ -188,3 +211,27 @@ python reports/build_pdf_report.py
 
 ## 📜 License
 This project is open-source under the [MIT License](LICENSE).
+
+## Historical dashboard corrections
+
+The existing Flask routes, five dashboard tabs, visual styling, source schemas, and separate scenario engine are retained. Custom business and CSV upload behavior is unchanged.
+
+Historical dashboard and EDA weather now share exact NYC local timestamps/dates from the imported historical weather file. No nearest-date extrapolation, seven-day repetition, or synthetic replacement is used. Missing values display as unavailable. Historical source geography is displayed independently of the city used for live scenarios.
+
+Fixed revenue multipliers have been removed from the historical dashboard. With enough matched wet/dry observations and a full-rank design, the dashboard fits daily revenue against precipitation with weekday, month, trend, temperature and wind controls (snow is included when variable). The no-precipitation comparison holds other covariates fixed; the predicted difference is an in-sample association, not causal attribution. HC3 uncertainty intervals and sample size are displayed. Unsupported estimates remain unavailable. The separate scenario simulator still uses explicit assumptions.
+
+History controls use calendar-day windows anchored to each dataset's latest observation; full history displays actual coverage and observation counts, including a warning that gaps may exist. Invalid dashboard API input returns JSON validation errors with HTTP 400.
+
+## Retail timeline weather and connected graphs
+
+`python -m src.refresh_data --source retail-weather` imports daily Open-Meteo historical reanalysis for London over the full UCI retail date range. The UCI source establishes only a UK-based retailer; London is explicitly a regional proxy, not a verified premises location. Its provenance URL and SHA-256 appear in the refresh manifest. Retail weather is shown for context without estimating a store-level weather effect.
+
+Historical rainfall uses its own daily date series, including dates without sales observations. Revenue traces connect observed markers across missing dates for visual continuity; no revenue records or interpolated revenue markers are added. Source/connection notices explain this display choice.
+
+### Long gaps in historical charts
+
+Short gaps of up to seven days may be connected between observed markers. Longer gaps are separated and omitted from the date axis, with an explicit annotation; neither sales nor weather values are invented to bridge them. Taxi history defaults to the latest available calendar month. Full available history remains selectable.
+
+## Continuous presentation mode
+
+At the user's request, all historical graph segments are now connected, including long gaps. These segments are visual estimates and do not create new sales observations in the source Parquet files. Missing weather is filled deterministically with a seasonal scenario and flagged by `weather_estimated`. Chipotle's quarterly weather is explicitly a representative scenario rather than measured company-wide weather. Where a fitted weather model is unsupported, a trailing-median revenue comparator supplies an estimated baseline; its deviation is never claimed as a causal weather effect. API estimation metadata counts weather and comparator rows. Source business and downloaded weather files remain unchanged by these display estimates.

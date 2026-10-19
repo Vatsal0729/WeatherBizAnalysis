@@ -9,7 +9,7 @@ const state = {
     weather: null,
     activeTab: "tab1",
     inspectedDayIdx: 6,
-    horizon: "Last 6 Months (180 Days)",
+    horizon: "Last 180 Days",
     simDow: 0,
     simHour: 12,
     simRain: 0.0,
@@ -297,10 +297,11 @@ function resetSimulationToLive() {
 }
 
 // Currency Formatter
-function formatCurrency(val) {
-    if (val === null || val === undefined || isNaN(val)) return "$0";
+function formatCurrency(val, currency = "USD") {
+    if (val === null || val === undefined || isNaN(val)) return "Estimated";
     const num = Number(val);
-    const sign = num < 0 ? "-$" : "";
+    const symbol = currency === "GBP" ? "£" : "$";
+    const sign = num < 0 ? `-${symbol}` : symbol;
     const absVal = Math.abs(num);
     if (absVal >= 1e9) {
         return `${sign}${(absVal / 1e9).toFixed(2)}B`;
@@ -354,32 +355,33 @@ function updateHorizonOptions(bKey) {
     if (!sel) return;
     if (bKey === "nyc_taxi") {
         sel.innerHTML = `
-            <option value="Last 7 Days (1 Week)">Last 7 Days (1 Week)</option>
-            <option value="Last 14 Days (2 Weeks)">Last 14 Days (2 Weeks)</option>
-            <option value="Full Month (All 31 Days)" selected>Full Month (All 31 Days)</option>
+            <option value="Last 7 Calendar Days">Last 7 Calendar Days</option>
+            <option value="Last 14 Calendar Days">Last 14 Calendar Days</option>
+            <option value="Latest Available Month" selected>Latest Available Month</option>
+            <option value="Full Available History">Full Available History</option>
         `;
     } else if (bKey === "citibike_nyc") {
         sel.innerHTML = `
-            <option value="Last 30 Days (1 Month)">Last 30 Days (1 Month)</option>
-            <option value="Last 90 Days (3 Months)">Last 90 Days (3 Months)</option>
-            <option value="Full Season (All 120 Days)" selected>Full Season (All 120 Days)</option>
+            <option value="Last 30 Calendar Days">Last 30 Calendar Days</option>
+            <option value="Last 90 Calendar Days">Last 90 Calendar Days</option>
+            <option value="Full Available History" selected>Full Available History</option>
         `;
     } else if (bKey === "online_retail") {
         sel.innerHTML = `
-            <option value="Last 3 Months (90 Days)">Last 3 Months (90 Days)</option>
-            <option value="Last 6 Months (180 Days)">Last 6 Months (180 Days)</option>
-            <option value="Full Year (All 305 Days)" selected>Full Year (All 305 Days)</option>
+            <option value="Last 90 Days">Last 90 Days</option>
+            <option value="Last 180 Days">Last 180 Days</option>
+            <option value="Full Available History" selected>Full Available History</option>
         `;
     } else if (bKey === "chipotle_sec") {
         sel.innerHTML = `
             <option value="Last 1 Year (4 Quarters)">Last 1 Year (4 Quarters)</option>
             <option value="Last 2 Years (8 Quarters)" selected>Last 2 Years (8 Quarters)</option>
-            <option value="Full History (All 27 Filings)">Full History (All 27 Filings)</option>
+            <option value="Full Available History">Full Available History</option>
         `;
     } else {
         sel.innerHTML = `
-            <option value="Last 3 Months (90 Days)">Last 3 Months (90 Days)</option>
-            <option value="Last 6 Months (180 Days)" selected>Last 6 Months (180 Days)</option>
+            <option value="Last 90 Days">Last 90 Days</option>
+            <option value="Last 180 Days" selected>Last 180 Days</option>
             <option value="Full 2 Years (All Data)">Full 2 Years (All Data)</option>
         `;
     }
@@ -429,7 +431,13 @@ async function loadPortfolioData() {
 
         const data = await resp.json();
         if (data.error) {
-            console.error("Portfolio error:", data.error);
+            document.getElementById("dataScopeNotice").textContent = data.error;
+            document.getElementById("kpiShift").textContent = "Estimated";
+            document.getElementById("kpiEarned").textContent = "Estimated";
+            document.getElementById("kpiRain").textContent = "Estimated";
+            Plotly.purge("chart7d");
+            Plotly.purge("chartHistorical");
+            document.getElementById("dayInsightsGrid").replaceChildren();
             return;
         }
 
@@ -438,18 +446,17 @@ async function loadPortfolioData() {
 
         // 1. KPI Cards
         const m = data.metrics;
+        const coverage = data.coverage;
+        document.getElementById("dataScopeNotice").textContent = `${data.scope_notice || ''} ${coverage ? `Coverage: ${coverage.first} to ${coverage.last}; ${coverage.observations} observations, ${coverage.selected_observations} in the selected range. Gaps may exist.` : ''}`;
+        document.getElementById("impactModelNotice").textContent = data.impact_model?.description || '';
+        document.getElementById("kpiUnitsSub")?.setAttribute("title", data.source_location || '');
         const impactEl = document.getElementById("kpiShift");
-        impactEl.textContent = formatCurrency(m.total_week_impact);
-        impactEl.className = `metric-number ${m.total_week_impact >= 0 ? 'status-positive' : 'status-negative'}`;
+        impactEl.textContent = formatCurrency(m.total_week_impact, data.currency);
+        impactEl.className = `metric-number ${m.total_week_impact == null ? '' : (m.total_week_impact >= 0 ? 'status-positive' : 'status-negative')}`;
+        document.getElementById("kpiShiftSub").textContent = m.total_week_impact == null ? 'Estimated baseline comparison' : (data.impact_model?.estimated ? 'Deviation from estimated baseline' : 'Fitted precipitation association; not causal');
 
-        document.getElementById("kpiShiftSub").innerHTML = `
-            <span class="${m.total_week_impact >= 0 ? 'status-positive' : 'status-negative'}">
-                ${m.total_week_impact >= 0 ? 'Extra Gain' : 'Lost Sales'}
-            </span> vs baseline
-        `;
-
-        document.getElementById("kpiEarned").textContent = formatCurrency(m.total_week_actual).replace(/^\+/, '');
-        document.getElementById("kpiEarnedSub").textContent = `Expected: ${formatCurrency(m.total_week_base).replace(/^\+/, '')}`;
+        document.getElementById("kpiEarned").textContent = formatCurrency(m.total_week_actual, data.currency).replace(/^\+/, '');
+        document.getElementById("kpiEarnedSub").textContent = `Model baseline: ${formatCurrency(m.total_week_base, data.currency).replace(/^\+/, '')}`;
 
         const unitsEl = document.getElementById("kpiUnits");
         const unitsSub = document.getElementById("kpiUnitsSub");
@@ -462,11 +469,11 @@ async function loadPortfolioData() {
                 unitsSub.textContent = "Market: NYC TLC";
             } else {
                 unitsEl.textContent = "1 Business";
-                unitsSub.textContent = `Market: ${state.city}`;
+                unitsSub.textContent = `Source: ${data.source_location || state.city}`;
             }
         }
 
-        document.getElementById("kpiRain").textContent = `${m.total_rain_week.toFixed(1)} mm`;
+        document.getElementById("kpiRain").textContent = m.total_rain_week == null ? "Estimated" : `${m.total_rain_week.toFixed(1)} mm`;
 
         // 2. Render 7-Day Chart
         render7DayChart(data.chart_7d, cadence);
@@ -500,10 +507,10 @@ function render7DayChart(chartData, cadence) {
             line: { color: b.color, width: 2.8, shape: "linear" },
             marker: { size: 7, color: b.color, symbol: b.symbol },
             yaxis: "y1",
-            hovertemplate: `<b>${b.name}</b><br>Actual Sales: $%{y:,.0f}<extra></extra>`
+            hovertemplate: `<b>${b.name}</b><br>Observed Sales: ${b.currency === "GBP" ? "£" : "$"}%{y:,.0f}<extra></extra>`
         });
 
-        traces.push({
+        if (b.baseline?.some(v => v != null)) traces.push({
             x: chartData.x_labels,
             y: b.baseline,
             name: `${b.clean_label} — Baseline`,
@@ -512,7 +519,7 @@ function render7DayChart(chartData, cadence) {
             line: { color: b.color, width: 1.8, dash: "dash" },
             opacity: 0.65,
             yaxis: "y1",
-            hovertemplate: `<b>${b.name} (Baseline)</b><br>Expected Sales: $%{y:,.0f}<extra></extra>`
+            hovertemplate: `<b>${b.name} (Baseline)</b><br>Model Baseline: ${b.currency === "GBP" ? "£" : "$"}%{y:,.0f}<extra></extra>`
         });
     });
 
@@ -540,7 +547,7 @@ function render7DayChart(chartData, cadence) {
         margin: { l: 85, r: 25, t: 30, b: 120 },
         grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
         yaxis: {
-            title: { text: "Revenue ($)", standoff: 18 },
+            title: { text: `Revenue (${chartData.currency === "GBP" ? "£" : "$"})`, standoff: 18 },
             automargin: true,
             fixedrange: true,
             domain: [0.38, 1.0],
@@ -595,7 +602,7 @@ function renderDayInReview(dayReview, chart7d, cadence) {
 
     document.getElementById("dayHeaderSummary").innerHTML = `
         <strong>Interval:</strong> ${dayReview.day_name} (${dayReview.date_str}) &nbsp;|&nbsp; 
-        <strong>Atmospheric / Source:</strong> ${dayReview.weather_icon} (${dayReview.temperature}°C, ${dayReview.rain} mm rain)
+        <strong>Atmospheric / Source:</strong> ${dayReview.weather_icon} (${dayReview.temperature == null ? "estimated temperature" : `${dayReview.temperature}°C`}, ${dayReview.rain == null ? "estimated rain" : `${dayReview.rain} mm rain`})
     `;
 
     // Render Cards
@@ -603,11 +610,13 @@ function renderDayInReview(dayReview, chart7d, cadence) {
     grid.innerHTML = "";
 
     dayReview.insights.forEach(ins => {
+        const available = ins.delta != null;
         const delta = ins.delta ?? 0;
-        const sign = delta >= 0 ? "+$" : "-$";
+        const money = ins.currency === "GBP" ? "£" : "$";
+        const sign = delta >= 0 ? `+${money}` : `-${money}`;
         const badgeCls = delta >= 0 ? "status-positive" : "status-negative";
         const actualRev = ins.actual_rev ?? 0;
-        const baselineRev = ins.baseline_rev ?? 0;
+        const baselineRev = ins.baseline_rev;
         const pctChange = ins.pct_change ?? (baselineRev > 0 ? (delta / baselineRev * 100) : 0);
         const bullets = ins.bullets || [ins.trigger, ins.reaction, ins.financial, ins.linkage, ins.guidance].filter(Boolean);
         const name = ins.name || ins.b_name || "Business Intelligence";
@@ -618,10 +627,10 @@ function renderDayInReview(dayReview, chart7d, cadence) {
             <div>
                 <div class="insight-top">
                     <span class="insight-title">${name}</span>
-                    <span class="${badgeCls}">${sign}${Math.abs(Math.round(delta)).toLocaleString()} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(1)}%)</span>
+                    <span class="${badgeCls}">${available ? `${sign}${Math.abs(Math.round(delta)).toLocaleString()} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(1)}%)` : 'Estimated impact'}</span>
                 </div>
                 <div style="font-size: 0.82rem; color: var(--ink); font-weight: 600; margin-bottom: 8px;">
-                    Earned: ${formatCurrency(actualRev).replace(/^\+/, '')} &nbsp;|&nbsp; Normal: ${formatCurrency(baselineRev).replace(/^\+/, '')}
+                    Earned: ${formatCurrency(actualRev, ins.currency).replace(/^\+/, '')} &nbsp;|&nbsp; Model baseline: ${formatCurrency(baselineRev, ins.currency).replace(/^\+/, '')}
                 </div>
                 <div class="insight-content">
                     <strong style="color: var(--ink); font-size: 0.92rem; display: block; margin-bottom: 5px;">${ins.headline || ''}</strong>
@@ -732,8 +741,8 @@ function renderDayInReview(dayReview, chart7d, cadence) {
         tr.innerHTML = `
             <td>${row.num}</td>
             <td>${row.time}</td>
-            <td>${row.temp}°C</td>
-            <td>${row.rain} mm</td>
+            <td>${row.temp == null ? "Estimated" : `${row.temp}°C`}</td>
+            <td>${row.rain == null ? "Estimated" : `${row.rain} mm`}</td>
             <td>${row.food_orders}</td>
             <td>${row.price_surge}</td>
             <td>${row.wait_time}</td>
@@ -747,48 +756,64 @@ function renderDayInReview(dayReview, chart7d, cadence) {
 // Render Tab 2 Historical Timeline Chart
 function renderHistoricalChart(hist, cadence) {
     const traces = [];
+    const timeBreaks = [...(hist.range_breaks || [])];
+    const day = 86400000;
+    const gapLimit = (cadence === "quarterly" ? 370 : 31) * day;
+    hist.dates.forEach((date, i) => {
+        if (!i) return;
+        const previous = Date.parse(hist.dates[i - 1]);
+        if (Date.parse(date) - previous > gapLimit) {
+            // Retain two visible days for a short connector between recorded periods.
+            timeBreaks.push({bounds: [new Date(previous + 2 * day).toISOString().slice(0, 10), date]});
+        }
+    });
+    const weatherDates = hist.weather_dates || hist.dates;
+    const weatherRain = hist.weather_rainfall || hist.rainfall;
+    const visibleWeather = weatherDates.map((date, i) => ({date, rain: weatherRain[i]}))
+        .filter(point => !timeBreaks.some(gap => point.date >= gap.bounds[0] && point.date < gap.bounds[1]));
 
     hist.businesses.forEach(b => {
         // Actual Solid Line
         traces.push({
             x: hist.dates,
             y: b.actual,
+            connectgaps: true,
             name: `${b.clean_label} — Actual`,
             mode: "lines+markers",
             legendgroup: b.key,
             line: { color: b.color, width: 2.8 },
             marker: { size: 6, color: b.color, symbol: b.symbol || "circle" },
             yaxis: "y1",
-            hovertemplate: `<b>${b.name}</b><br>Date: %{x}<br>Actual Sales: $%{y:,.0f}<extra></extra>`
+            hovertemplate: `<b>${b.name}</b><br>Date: %{x}<br>Observed Sales: ${b.currency === "GBP" ? "£" : "$"}%{y:,.0f}<extra></extra>`
         });
 
         // Baseline Dashed Line
-        if (b.baseline && b.baseline.length) {
+        if (b.baseline?.some(v => v != null)) {
             traces.push({
                 x: hist.dates,
                 y: b.baseline,
+                connectgaps: true,
                 name: `${b.clean_label} — Baseline`,
                 mode: "lines",
                 legendgroup: b.key,
                 line: { color: b.color, width: 1.8, dash: "dash" },
                 opacity: 0.65,
                 yaxis: "y1",
-                hovertemplate: `<b>${b.name} (Baseline)</b><br>Date: %{x}<br>Expected Sales: $%{y:,.0f}<extra></extra>`
+                hovertemplate: `<b>${b.name} (Baseline)</b><br>Date: %{x}<br>Model Baseline: ${b.currency === "GBP" ? "£" : "$"}%{y:,.0f}<extra></extra>`
             });
         }
     });
 
     traces.push({
-        x: hist.dates,
-        y: hist.rainfall,
-        name: "Rainfall (mm)",
-        mode: "lines",
+        x: visibleWeather.map(point => point.date),
+        y: visibleWeather.map(point => point.rain),
+        name: hist.weather_label || "Historical rainfall (mm)",
+        type: "bar",
         line: { color: "#38BDF8", width: 1.8 },
-        fill: "tozeroy",
-        fillcolor: "rgba(56, 189, 248, 0.12)",
+        marker: { color: "rgba(56, 189, 248, 0.65)" },
         yaxis: "y2",
-        showlegend: false,
-        hovertemplate: "Rainfall: %{y:.1f} mm<extra></extra>"
+        showlegend: true,
+        hovertemplate: "Date: %{x}<br>Historical rain: %{y:.1f} mm<extra></extra>"
     });
 
     const layout = {
@@ -797,10 +822,11 @@ function renderHistoricalChart(hist, cadence) {
         plot_bgcolor: "#ffffff",
         font: { family: "Inter, -apple-system, sans-serif", size: 11, color: "#172f2b" },
         height: 520,
+        annotations: hist.range_breaks?.length ? [{text: "Long periods without sales records are omitted from the time axis",xref:"paper",yref:"paper",x:0,y:1.08,showarrow:false,font:{size:10,color:"#64736c"}}] : [],
         margin: { l: 85, r: 25, t: 30, b: 130 },
         grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
         yaxis: {
-            title: { text: "Revenue ($)", standoff: 18 },
+            title: { text: `Revenue (${hist.currency === "GBP" ? "£" : "$"})`, standoff: 18 },
             automargin: true,
             fixedrange: true,
             domain: [0.38, 1.0],
@@ -817,6 +843,7 @@ function renderHistoricalChart(hist, cadence) {
         },
         xaxis: {
             type: "date",
+            rangebreaks: timeBreaks,
             fixedrange: true,
             gridcolor: "#e7ebe3",
             tickfont: { size: 10.5, color: "#64736c" }
@@ -841,6 +868,12 @@ function renderHistoricalChart(hist, cadence) {
 function renderEconometricsTable(records) {
     const tbody = document.getElementById("econometricTableBody");
     tbody.innerHTML = "";
+    if (!records.length) {
+        const row = tbody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 9;
+        cell.textContent = "Estimated baseline comparison. See the estimation note above.";
+    }
     records.forEach(r => {
         const tr = document.createElement("tr");
         tr.innerHTML = `

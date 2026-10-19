@@ -23,15 +23,16 @@
             <a href="/notebook">Notebook Walkthrough &rarr;</a>
         </nav>
 
+
         <!-- Hero Section -->
         <section class="hero">
             <div>
                 <p class="eyebrow">WEATHER × COMMERCE</p>
                 <h1>How markets move<br>when the weather changes.</h1>
-                <p class="intro">Cross-cadence econometric analysis of urban mobility, digital commerce, and dining across four verified production datasets. Trace every number to its source, compare weather patterns, and examine defensible empirical evidence.</p>
+                <p class="intro">Cross-cadence econometric analysis of urban mobility, digital commerce, and dining across four source datasets. Trace every number to its source, compare weather patterns, and examine defensible empirical evidence.</p>
             </div>
             <div class="hero-aside">
-                <span class="status"><i></i> 4 VERIFIED PRODUCTION DATASETS</span>
+                <span class="status"><i></i> 4 SOURCE DATASETS</span>
                 <p id="coverage">NYC Taxi, Citi Bike, Online Retail &amp; Chipotle SEC</p>
                 <p class="small">Open-Meteo ERA5 Reanalysis &amp; NASA POWER.<br>Multi-cadence real-world business records.</p>
             </div>
@@ -90,13 +91,15 @@
         <!-- ============================================================== -->
         <!-- TAB 1: OPERATIONAL IMPACT -->
         <!-- ============================================================== -->
+            <p id="dataScopeNotice" role="status" style="color:var(--muted); margin-bottom:12px;"></p>
+            <p id="impactModelNotice" style="color:var(--muted); margin-bottom:16px;"></p>
         <div id="tab1" class="tab-pane active">
             <!-- 3 Metric Cards -->
             <div class="metrics-row">
                 <div class="metric-grid-card">
-                    <div class="metric-label">Weather Sales Shift</div>
+                    <div class="metric-label">Estimated Revenue Shift</div>
                     <div class="metric-number" id="kpiShift">$0</div>
-                    <div class="metric-subtext" id="kpiShiftSub">vs clear baseline</div>
+                    <div class="metric-subtext" id="kpiShiftSub">Fitted association, not causal</div>
                 </div>
                 <div class="metric-grid-card">
                     <div class="metric-label">Total Earned Revenue</div>
@@ -104,9 +107,9 @@
                     <div class="metric-subtext" id="kpiEarnedSub">Normal expected: $0</div>
                 </div>
                 <div class="metric-grid-card">
-                    <div class="metric-label">Past 7-Day Rainfall</div>
+                    <div class="metric-label">Rainfall for Displayed Periods</div>
                     <div class="metric-number" id="kpiRain">0.0 mm</div>
-                    <div class="metric-subtext">Total rain recorded</div>
+                    <div class="metric-subtext">Matched historical weather only</div>
                 </div>
             </div>
 
@@ -115,7 +118,7 @@
                 <div class="panel-title">
                     <div>
                         <h3>Operational Revenue &amp; Rainfall Timeline</h3>
-                        <p>Solid lines indicate actual operational revenue; dashed lines indicate baseline expected sales on clear days.</p>
+                        <p>Solid lines join observed revenue points; segments across missing dates are visual estimates. Dashed lines show a fitted comparator or estimated trailing baseline. Missing weather uses estimated seasonal values.</p>
                     </div>
                 </div>
                 <div id="chart7d" style="width: 100%; height: 500px;"></div>
@@ -178,7 +181,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                 <div>
                     <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ink);" id="historicalTitle">Historical Trends &amp; Seasonality</h3>
-                    <p style="font-size: 0.82rem; color: var(--muted);">Macro revenue trends and true weather elasticity across multi-year cycles.</p>
+                    <p style="font-size: 0.82rem; color: var(--muted);">Historical revenue and date-matched weather across the selected available dates.</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <label for="horizonSelect" style="font-size: 0.82rem; font-weight: 600; color: var(--muted);">Timeline Range:</label>
@@ -199,10 +202,10 @@
             <section style="margin-top: 20px;">
                 <details open class="panel">
                     <summary style="font-weight: 700; font-size: 0.94rem; color: var(--ink); cursor: pointer; margin-bottom: 8px;">
-                        View All Metrics &amp; Econometric Model Results (TWFE Regressions)
+                        Selected Dataset &amp; Fitted Association Results
                     </summary>
                     <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 12px;">
-                        This table compares raw naive correlation against seasonality-adjusted econometric impact after removing calendar and city-level confounders.
+                        This table describes the selected historical dataset model. Fitted associations do not establish a causal weather impact.
                     </p>
                     <div class="table-wrap">
                         <table class="custom-table">
@@ -210,13 +213,13 @@
                                 <tr>
                                     <th>#</th>
                                     <th>Business Metric</th>
-                                    <th>Normal Daily Average</th>
+                                    <th>Observed Daily Average</th>
                                     <th>Raw Temp Correlation (r)</th>
-                                    <th>Adjusted Temp Impact (% / °C)</th>
+                                    <th>Temperature Control</th>
                                     <th>Raw Rain Correlation (r)</th>
-                                    <th>Adjusted Rain Impact (% / mm)</th>
+                                    <th>Rain Association (revenue units / mm)</th>
                                     <th>Model Fit (R²)</th>
-                                    <th>Reliability (p &lt; 0.05)</th>
+                                    <th>Uncertainty (p and 95% interval)</th>
                                 </tr>
                             </thead>
                             <tbody id="econometricTableBody">
@@ -252,7 +255,7 @@
 
             <!-- 3. Per-Business Domino Cards -->
             <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--ink); margin-bottom: 6px;">Unique Business Domino Effects &amp; Impact Analysis</h4>
-            <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Granular causal chains and operational ripple effects customized for each selected business under current city weather.</p>
+            <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Illustrative scenario chains using assumed business responses under the selected city weather; these are not measured historical effects.</p>
             
             <div id="bizDominosGrid" class="biz-domino-grid">
                 <!-- Populated dynamically -->
@@ -269,7 +272,7 @@
             <article class="panel" style="margin-top: 24px;">
                 <div class="panel-title">
                     <div>
-                        <h3>Past 30 Days Net Weather Sales Shift ($ USD)</h3>
+                        <h3>Past 30 Days Net Estimated Revenue Shift ($ USD)</h3>
                         <p>Tracking how weather shifted dollar earnings above or below baseline across your businesses.</p>
                     </div>
                 </div>
@@ -301,7 +304,7 @@
                 <summary style="font-weight: 700; font-size: 0.92rem; color: var(--teal); cursor: pointer; margin-bottom: 12px;">
                     Customize What-If Scenarios (Optional Simulation Controls)
                 </summary>
-                <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Change day, hour, or weather intensity to test hypothetical conditions against the live baseline.</p>
+                <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 14px;">Change day, hour, or weather intensity to test hypothetical conditions. Scenario responses use assumed coefficients, not effects measured from the historical business dataset.</p>
                 
                 <div class="slider-row">
                     <div class="slider-group">
@@ -435,7 +438,7 @@
     <!-- Observatory Footer -->
     <footer>
         <span>WEATHER × COMMERCE / EXECUTIVE PLATFORM</span>
-        <span id="builtAt">Verified Snapshot 2026</span>
+        <span id="builtAt">Research Snapshot 2026</span>
         <span>Association ≠ Causation.</span>
     </footer>
 

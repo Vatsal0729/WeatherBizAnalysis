@@ -90,6 +90,7 @@ REAL_BUSINESS_CATALOG = {
 
 # Cache for loaded real datasets
 _LOADED_DATA = {}
+_LOADED_VERSIONS = {}
 
 def get_real_catalog():
     """Returns the metadata catalog for the 4 real-world businesses."""
@@ -97,8 +98,6 @@ def get_real_catalog():
 
 def load_real_dataset(b_key: str) -> pd.DataFrame:
     """Loads and caches the cleaned real dataset for the requested business."""
-    if b_key in _LOADED_DATA:
-        return _LOADED_DATA[b_key]
     
     cfg = REAL_BUSINESS_CATALOG.get(b_key)
     if not cfg:
@@ -108,6 +107,10 @@ def load_real_dataset(b_key: str) -> pd.DataFrame:
     if not os.path.exists(file_path):
         return pd.DataFrame()
         
+    version = (os.stat(file_path).st_mtime_ns, os.stat(file_path).st_size)
+    if b_key in _LOADED_DATA and _LOADED_VERSIONS.get(b_key) == version:
+        return _LOADED_DATA[b_key]
     df = pd.read_parquet(file_path)
+    _LOADED_VERSIONS[b_key] = version
     _LOADED_DATA[b_key] = df
     return df
