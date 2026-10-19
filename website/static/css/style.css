@@ -761,6 +761,9 @@ tr:hover td {
 }
 
 /* Forecast strip */
+.evidence-legend{display:flex;gap:18px;flex-wrap:wrap;padding:12px 15px;margin:0 0 18px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:11px;color:var(--muted)}.evidence-legend span{display:flex;align-items:center;gap:7px}.evidence-legend i{display:inline-block;width:25px;height:3px}.legend-observed{background:var(--teal)}.legend-modelled{border-top:2px dashed var(--orange)}.legend-estimated{background:repeating-linear-gradient(90deg,#8a9690 0 4px,transparent 4px 7px)}.legend-hypothetical{height:10px!important;background:rgba(178,118,55,.16);border:1px solid var(--orange)}
+
+/* Forecast strip */
 .forecast-strip {
     display: grid;
     grid-template-columns: repeat(7, 1fr);

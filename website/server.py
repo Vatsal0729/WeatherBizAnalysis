@@ -7,7 +7,7 @@ import datetime
 import math
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 
 # Add parent directory to path so src modules import cleanly
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -54,7 +54,11 @@ from src.real_eda_engine import (
     compute_rain_groups,
     compute_monthly_trends,
     compute_correlation_and_math,
-    get_raw_to_published_audit
+    get_raw_to_published_audit,
+    build_dataset_scorecards,
+    compute_quality_evidence,
+    compute_missingness_matrix,
+    compute_advanced_association
 )
 
 app = Flask(
@@ -256,6 +260,16 @@ def eda_presentation():
     points, trend_start, trend_end, trend_max = compute_monthly_trends(d)
     corr, columns, association = compute_correlation_and_math(d)
     audit = get_raw_to_published_audit()
+    scorecards = build_dataset_scorecards()
+    quality = compute_quality_evidence(d)
+    missingness = compute_missingness_matrix(d)
+    diagnostics = compute_advanced_association(d)
+    gap_rows = []
+    if len(d) > 1:
+        gap_frame = d.sort_values("date")[["date"]].copy()
+        gap_frame["gap_days"] = gap_frame["date"].diff().dt.total_seconds().div(86400)
+        for _, row in gap_frame.nlargest(5,"gap_days").dropna().iterrows():
+            gap_rows.append({"date":str(row["date"]),"gap_days":float(row["gap_days"])})
     
     start_str = str(d["date"].min().date()) if hasattr(d["date"].min(), "date") else str(d["date"].min())
     end_str = str(d["date"].max().date()) if hasattr(d["date"].max(), "date") else str(d["date"].max())
@@ -289,6 +303,12 @@ def eda_presentation():
         end=end_str,
         rows=len(d),
         source_rows=len(base)
+        ,scorecards=scorecards
+        ,quality=quality
+        ,missingness=missingness
+        ,diagnostics=diagnostics
+        ,observed_weather_rows=int(d[["rain_mm","temperature_c","wind_kmh"]].notna().all(axis=1).sum())
+        ,gap_rows=gap_rows
     )
 
 @app.route("/api/eda-audit")
@@ -297,92 +317,58 @@ def eda_audit():
 
 @app.route("/notebook")
 def notebook_walkthrough():
-    audit = get_raw_to_published_audit()
-    
-    # Calculate worked math on NYC Taxi as reference
+    notebook_path = os.path.join(BASE_DIR, "notebooks", "weather_impact_analysis.ipynb")
+    with open(notebook_path, "r", encoding="utf-8") as fh:
+        notebook = json.load(fh)
+    scorecards = pd.DataFrame(build_dataset_scorecards())
     taxi_df = get_matched_series_data("nyc_taxi")
     _, _, assoc = compute_correlation_and_math(taxi_df)
     r_math = assoc.get("rain", {})
-    math_report = {
-        "n": r_math.get("n", 0),
-        "x_mean": r_math.get("xmean", 0),
-        "y_mean": r_math.get("ymean", 0),
-        "pearson_r": r_math.get("pearson", 0),
-        "slope": r_math.get("slope", 0),
-        "intercept": r_math.get("intercept", 0),
-        "r_squared": r_math.get("r2", 0),
-        "sxx": r_math.get("sxx", 0),
-        "syy": r_math.get("syy", 0),
-        "sxy": r_math.get("sxy", 0),
-        "covariance": r_math.get("covariance", 0)
-    }
-    
+    quality = compute_quality_evidence(taxi_df)
+    quality_table = pd.DataFrame(quality["rows"])
+    stats_table = pd.DataFrame(compute_eda_statistics(taxi_df))
+    corr, _, _ = compute_correlation_and_math(taxi_df)
+    diagnostics = compute_advanced_association(taxi_df)
     counts = {key:len(load_real_dataset(key)) for key in REAL_BUSINESS_CATALOG}
-    taxi_numeric = taxi_df['count']
-    q1, q3 = taxi_numeric.quantile([0.25,0.75])
-    iqr = q3-q1
-    flagged = int(((taxi_numeric < q1-1.5*iqr) | (taxi_numeric > q3+1.5*iqr)).sum())
-    matrix = taxi_df[['count','rain_mm','temperature_c','wind_kmh']].corr(method='spearman')
-    model_report = build_portfolio('nyc_taxi','NYC','Full Available History')['impact_model']
-    stages = [
-        {
-            'number':1, 'title':'Load current Parquet snapshots',
-            'explanation':'Inspect the current hourly, daily and quarterly source tables.',
-            'code':"from src.real_data_manager import load_real_dataset\nkeys = ['nyc_taxi','citibike_nyc','online_retail','chipotle_sec']\nfor key in keys:\n    print(key, len(load_real_dataset(key)))",
-            'output':'\n'.join(f'{key}: {count:,} rows' for key,count in counts.items()),
-            'math':'Shape = (observations, features)'
-        },
-        {
-            'number':2, 'title':'Audit current snapshot inventory',
-            'explanation':'Compare current snapshot row counts across the five source groups.',
-            'code':"from src.real_eda_engine import get_raw_to_published_audit\nfor row in get_raw_to_published_audit()['rows']:\n    print(row['source'], row['clean'], row['clean_unit'])",
-            'output':'\n'.join(f"{row['source']}: {row['clean']:,} {row['clean_unit']}" for row in audit['rows']),
-            'math':'Snapshot rows describe the current analytical tables.'
-        },
-        {
-            'number':3, 'title':'Engineer interpretable weather & calendar features',
-            'explanation':'Use the same feature builder as the EDA presentation.',
-            'code':"from src.real_eda_engine import get_matched_series_data\ntaxi = get_matched_series_data('nyc_taxi')\nprint(taxi[['date','count','rain_mm','temperature_c','weekday','weather_estimated']].head().to_string(index=False))",
-            'output':taxi_df[['date','count','rain_mm','temperature_c','weekday','weather_estimated']].head().to_string(index=False),
-            'math':'weekday = day of week of the local observation date'
-        },
-        {
-            'number':4, 'title':'Compute descriptive distribution statistics & Tukey fences',
-            'explanation':'Calculate spread and flag extreme observations without deleting them.',
-            'code':"q1, q3 = taxi['count'].quantile([0.25,0.75])\niqr = q3-q1\nflagged = ((taxi['count'] < q1-1.5*iqr) | (taxi['count'] > q3+1.5*iqr)).sum()\nprint(f'IQR: {iqr:.1f}; flagged: {flagged}')",
-            'output':f'IQR: {iqr:.1f}; flagged: {flagged}',
-            'math':'IQR = Q3 - Q1; Tukey fences = Q1 - 1.5 IQR, Q3 + 1.5 IQR'
-        },
-        {
-            'number':5, 'title':'Spearman rank monotonic correlation matrix',
-            'explanation':'Compare ranks while accounting for tied values.',
-            'code':"cols = ['count','rain_mm','temperature_c','wind_kmh']\nprint(taxi[cols].corr(method='spearman').round(3).to_string())",
-            'output':matrix.round(3).to_string(),
-            'math':'Spearman rho = Pearson correlation of average ranks'
-        },
-        {
-            'number':6, 'title':'Reproduce Pearson and OLS mathematics',
-            'explanation':'The displayed mathematics use the same paired rows as the EDA.',
-            'code':"from src.real_eda_engine import compute_correlation_and_math\n_, _, association = compute_correlation_and_math(taxi)\nresult = association['rain']\nprint({k:result[k] for k in ['n','pearson','slope','intercept','r2']})",
-            'output':str({k:r_math[k] for k in ['n','pearson','slope','intercept','r2']}),
-            'math':'r = Sxy / sqrt(Sxx Syy); slope = Sxy / Sxx; intercept = mean(y) - slope * mean(x)'
-        },
-        {
-            'number':7, 'title':'Inspect the dashboard association model',
-            'explanation':'Inspect the actual daily-revenue model used by the executive dashboard.',
-            'code':"from src.historical_dashboard import build_portfolio\nreport = build_portfolio('nyc_taxi','NYC','Full Available History')['impact_model']\nprint(report)",
-            'output':json.dumps(model_report,indent=2),
-            'math':'Daily revenue = intercept + rain + temperature + wind + calendar controls + time trend (+ snow when variable). OLS with HC3 covariance; in-sample association.'
-        }
-    ]
+    gap_table = taxi_df.sort_values("date")[["date"]].assign(gap_days=lambda x:x.date.diff().dt.total_seconds()/86400).nlargest(5,"gap_days")
+    outputs = {
+        "Define scope before comparison": scorecards[["key","geography","cadence","n","start","end","weather_pct","value_status"]].to_string(index=False),
+        "Load observed case-study data": taxi_df.head()[["date","count","rain_mm","temperature_c","weather_estimated"]].to_string(index=False),
+        "Audit missingness and duplicates": quality_table[["feature","n","missing","missing_pct","missing_mechanism"]].to_string(index=False)+f"\nduplicate rows={quality['duplicate_rows']}; duplicate dates={quality['duplicate_dates']}",
+        "Flag unusual values two ways": quality_table[["feature","invalid_negative","iqr_flags","isolation_flags"]].to_string(index=False),
+        "Evaluate skewness transformations": quality_table[["feature","raw_skew","log1p_skew"]].round(3).to_string(index=False),
+        "Describe distributions": stats_table.round(3).to_string(index=False),
+        "Compare Pearson and Spearman": corr.round(3).to_string(),
+        "Reproduce Pearson and OLS mathematics": pd.Series({k:r_math.get(k) for k in ["n","xmean","ymean","sxx","syy","sxy","covariance","pearson","spearman","slope","intercept","r2"]}).to_string(),
+        "Inspect time patterns and gaps": gap_table.to_string(index=False),
+        "Diagnose the controlled association model": json.dumps({k:v for k,v in diagnostics.items() if k not in {"vif","sensitivity","lagged"}}, indent=2),
+        "Test sensitivity and lags": (pd.DataFrame(diagnostics.get("sensitivity",[])).round(3).to_string(index=False)+"\n\n"+pd.DataFrame(diagnostics.get("lagged",[])).round(3).to_string(index=False)),
+        "State bounded conclusions": "Observed: distributions, time patterns and matched-weather associations.\nEstimated: fare-derived revenue and scenarios remain labelled.\nNot identified: individual behaviour changes or a universal cross-case effect."
+    }
+    stages = []
+    for cell in notebook["cells"]:
+        meta = cell.get("metadata", {})
+        if cell.get("cell_type") != "code" or not meta.get("show_in_presentation"):
+            continue
+        title = meta["presentation_title"]
+        stages.append({"number":len(stages)+1,"title":title,
+                       "explanation":meta["presentation_explanation"],
+                       "math":meta["presentation_math"],"code":"".join(cell["source"]),
+                       "output":outputs.get(title, "Run the notebook cell to reproduce this stage.")})
 
     return render_template(
         "notebook.html",
-        audit=audit,
-        math_report=math_report,
         stages=stages,
-        dataset_counts=counts
+        dataset_counts=counts,
+        math_report={"pearson_r":r_math.get("pearson",0),"slope":r_math.get("slope",0),
+                     "intercept":r_math.get("intercept",0),"r_squared":r_math.get("r2",0)}
     )
+
+
+@app.route("/notebook/download")
+def notebook_download():
+    return send_file(os.path.join(BASE_DIR,"notebooks","weather_impact_analysis.ipynb"), as_attachment=True,
+                     download_name="weather_impact_analysis.ipynb")
 
 @app.route("/api/initial-state")
 def initial_state():

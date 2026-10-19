@@ -38,6 +38,13 @@
             </div>
         </section>
 
+        <aside class="evidence-legend" aria-label="Evidence type legend">
+            <span><i class="legend-observed"></i><strong>Observed</strong> source record</span>
+            <span><i class="legend-modelled"></i><strong>Modelled</strong> fitted comparator</span>
+            <span><i class="legend-estimated"></i><strong>Estimated</strong> proxy or filled value</span>
+            <span><i class="legend-hypothetical"></i><strong>Hypothetical</strong> scenario only</span>
+        </aside>
+
         <!-- Control Bar -->
         <div class="control-bar">
             <div class="business-select-wrapper">
@@ -118,7 +125,7 @@
                 <div class="panel-title">
                     <div>
                         <h3>Operational Revenue &amp; Rainfall Timeline</h3>
-                        <p>Solid lines join observed revenue points; segments across missing dates are visual estimates. Dashed lines show a fitted comparator or estimated trailing baseline. Missing weather uses estimated seasonal values.</p>
+                        <p>Solid markers are observed revenue. Lines break across long missing periods, which are shaded. Dashed lines show a fitted comparator; estimated weather remains explicitly labelled.</p>
                     </div>
                 </div>
                 <div id="chart7d" style="width: 100%; height: 500px;"></div>
