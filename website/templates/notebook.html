@@ -27,6 +27,7 @@
         <p class="intro">A guided walkthrough of the current analytical pipeline, pairing reproducible Python examples with calculated outputs and interpretation.</p>
         <div class="hero-actions">
           <a class="primary link-button" href="#stages">Start Walkthrough &darr;</a>
+          <a class="eda-button link-button" href="/notebook/download">Download executable .ipynb</a>
         </div>
       </div>
       <aside class="hero-aside">
@@ -36,8 +37,8 @@
       </aside>
     </section>
 
-    <p class="note">Analysis combines source observations with modelled estimates.</p>
-    <details class="panel"><summary>Methodology and interpretation</summary><p>Historical weather is matched by date where imported. Regional proxies and seasonal estimates support the presentation where appropriate. Estimated comparator shifts describe a baseline difference, not a measured causal weather effect. The examples below expose the same features and calculations used by the application.</p></details>
+    <p class="note evidence-note"><strong>Evidence boundary:</strong> the academic notebook uses observed business records and observed matched weather only. Scenario estimates remain in the executive interface and are excluded here.</p>
+    <details class="panel"><summary>Methodology and interpretation</summary><p>Every code panel below is read directly from <code>notebooks/weather_impact_analysis.ipynb</code>. Web outputs are calculated by the same shared analysis functions, and tests assert that the notebook stages and application remain synchronized.</p></details>
 
     <section class="notebook-map panel">
       <div>
@@ -47,7 +48,7 @@
       <div class="flow">
         <span>Production Records</span><b>&rarr;</b><span>Validation Rules</span><b>&rarr;</b><span>Feature Engineering</span><b>&rarr;</b><span>Descriptive EDA</span><b>&rarr;</b><span>Controlled Association Models</span>
       </div>
-      <p class="note">The pipeline operates exclusively on versioned Parquet data snapshots without altering raw municipal or statutory sources.</p>
+      <p class="note">Four independent case studies use one workflow. Their coefficients are not ranked as though their geography, cadence, value definition or exposure were interchangeable.</p>
     </section>
 
     <nav class="stage-nav" aria-label="Notebook stages">

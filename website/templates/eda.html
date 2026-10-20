@@ -24,7 +24,7 @@
       <div>
         <p class="eyebrow">THE RESEARCH WALKTHROUGH</p>
         <h1>From transaction records<br>to defensible insights.</h1>
-        <p class="intro">Explore how business activity varies with weather, seasonality and the day of the week across four source series.</p>
+        <p class="intro">Four independent case studies, one transparent EDA workflow. We compare methods—not raw coefficients—across different places, cadences and value definitions.</p>
       </div>
       <aside class="hero-aside">
         <p>4 Source Series.<br>Multi-Cadence Telemetry.</p>
@@ -38,8 +38,9 @@
       <a href="#distribution">03 Distributions</a>
       <a href="#relationships">04 Relationships</a>
       <a href="#time">05 Time patterns</a>
-      <a href="#conclusions">06 Interpretation</a>
+      <a href="#validation">06 Validation</a>
       <a href="#correlation-math">07 Correlation &amp; math</a>
+      <a href="#conclusions">08 Interpretation</a>
     </nav>
 
     <form class="panel eda-select" action="/eda" method="get">
@@ -74,8 +75,8 @@
         </select>
       </label>
       <button class="primary" type="submit">Refresh data</button>
-      <p class="note">Analysis combines source observations with modelled estimates.</p>
-      <details><summary>Methodology and interpretation</summary><p>Weather combines date-matched historical reanalysis with estimated seasonal values where records are missing. Retail uses a London regional proxy; Chipotle uses an estimated representative quarterly climate scenario. Estimates are presentation inputs, not verified local measurements.</p></details>
+      <p class="note evidence-note"><strong>Academic evidence mode:</strong> {{ observed_weather_rows }} of {{ rows }} displayed rows have fully observed matched weather. Missing weather stays missing; scenarios and seasonal fills are excluded from these statistics.</p>
+      <details><summary>Methodology and interpretation</summary><p>Each dataset is analysed as a separate case study. NYC series use exact local historical weather. Retail weather is a labelled regional proxy and is not used for store-level causal claims. Chipotle has no defensible company-wide weather exposure, so weather inference is intentionally unavailable.</p></details>
       <p class="note">All statistics and charts below are recalculated live from current analytical Parquet snapshots. Displaying {{ rows }} of {{ source_rows }} observations for {{ name }} · {{ start }} to {{ end }}.</p>
       {% if filter_warning %}
       <p class="eda-filter-warning">{{ filter_warning }}</p>
@@ -86,6 +87,17 @@
     <section id="collection" class="section">
       <p class="eyebrow">01 / COLLECTION &amp; STRUCTURE · CO 1</p>
       <h2>Understand the unit of observation.</h2>
+      <article class="panel">
+        <div class="panel-title"><div><h3>Dataset comparability scorecard</h3><p>The cases share an analytical workflow, not a common experimental design.</p></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Case study</th><th>Geography</th><th>Cadence</th><th>Coverage</th><th>N</th><th>Observed weather</th><th>Value status</th></tr></thead>
+          <tbody>{% for card in scorecards %}<tr class="{% if card.key == series %}active-row{% endif %}">
+            <td><strong>{{ card.name }}</strong><br><small>{{ card.coverage_note }}</small></td><td>{{ card.geography }}</td><td>{{ card.cadence }}</td>
+            <td>{{ card.start }} → {{ card.end }}</td><td>{{ card.n }}</td><td>{{ '%.1f'|format(card.weather_pct) }}%</td><td>{{ card.value_status }}</td>
+          </tr>{% endfor %}</tbody>
+        </table></div>
+        <p class="note"><strong>Comparison rule:</strong> do not rank effect sizes across these cases without a shared geography, cadence, outcome definition and sampling design.</p>
+      </article>
       <article class="panel">
         <p>Operational datasets: business observations with local historical weather where imported. NYC Taxi measures volume per hour; Citi Bike and Retail measure daily sales; Chipotle measures quarterly GAAP financials. No record follows individual customers.</p>
         <div class="metrics">
@@ -142,6 +154,24 @@
         </div>
         <p class="note">{{ audit.note }} The inventory does not reconstruct upstream transaction exclusions.</p>
       </article>
+      <article class="panel">
+        <h3>Validation and missing-value evidence</h3>
+        <div class="metrics compact-metrics">
+          <div class="metric"><p>Exact duplicate rows</p><strong>{{ quality.duplicate_rows }}</strong></div>
+          <div class="metric"><p>Duplicate timestamps</p><strong>{{ quality.duplicate_dates }}</strong></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Feature</th><th>Type</th><th>Missing</th><th>Missing %</th><th>Mechanism assessment</th><th>Invalid negatives</th></tr></thead>
+          <tbody>{% for r in quality.rows %}<tr><td><strong>{{ r.feature }}</strong></td><td>{{ r.dtype }}</td><td>{{ r.missing }}</td><td>{{ '%.1f'|format(r.missing_pct) }}%</td><td>{{ r.missing_mechanism }}</td><td>{{ r.invalid_negative }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <p class="note">Missingness labels are reasoned diagnostics, not formal proof of MCAR/MAR/MNAR. Business outcomes are never silently imputed.</p>
+      </article>
+      <article class="panel">
+        <h3>Missingness by chronological period</h3>
+        <div class="table-wrap missingness-grid"><table><thead><tr><th>Period</th>{% for c in missingness.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+          <tbody>{% for row in missingness.rows %}<tr><th>{{ row.label }}</th>{% for c in missingness.columns %}<td style="--missing:{{ row[c] }}%"><span>{{ '%.0f'|format(row[c]) }}%</span></td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+      </article>
     </section>
 
     <!-- 03 Distributions -->
@@ -173,6 +203,12 @@
           </table>
         </div>
         <p class="note">SD is unbiased sample standard deviation. Outliers represent values exceeding Tukey fences: Q1 − 1.5×IQR or Q3 + 1.5×IQR; they are retained as genuine extreme market events.</p>
+      </article>
+      <article class="panel">
+        <h3>Outlier agreement and transformation check</h3>
+        <div class="table-wrap"><table><thead><tr><th>Feature</th><th>IQR flags</th><th>Isolation Forest flags</th><th>Raw skew</th><th>log1p skew</th><th>Decision</th></tr></thead>
+          <tbody>{% for r in quality.rows %}<tr><td><strong>{{ r.feature }}</strong></td><td>{{ r.iqr_flags }}</td><td>{{ r.isolation_flags }}</td><td>{{ '%.2f'|format(r.raw_skew) if r.raw_skew == r.raw_skew else 'N/A' }}</td><td>{{ '%.2f'|format(r.log1p_skew) if r.log1p_skew == r.log1p_skew else 'N/A' }}</td><td>Retain raw; use transformed view only when it improves interpretation.</td></tr>{% endfor %}</tbody>
+        </table></div>
       </article>
 
       {% for hist in histograms %}
@@ -238,6 +274,12 @@
         </div>
         <p class="note">Spearman ρ evaluates monotonic relationships using fractional ranks, handling tied dry intervals appropriately.</p>
       </article>
+      <article class="panel">
+        <h3>Pearson versus Spearman sensitivity</h3>
+        <div class="table-wrap"><table><thead><tr><th>Weather feature</th><th>Paired N</th><th>Pearson r</th><th>Spearman ρ</th><th>Linear R²</th></tr></thead><tbody>
+          {% for r in association.associations %}<tr><td>{{ r.feature }}</td><td>{{ r.n }}</td>{% if r.available %}<td>{{ '%.3f'|format(r.pearson) }}</td><td>{{ '%.3f'|format(r.spearman) }}</td><td>{{ '%.3f'|format(r.r2) }}</td>{% else %}<td colspan="3">Insufficient variation</td>{% endif %}</tr>{% endfor %}
+        </tbody></table></div>
+      </article>
     </section>
 
     <!-- 05 Time patterns -->
@@ -268,11 +310,46 @@
         </svg>
         <p class="note">Longitudinal averages summarize the selected activity periods.</p>
       </article>
+      <article class="panel gap-panel">
+        <h3>Largest observation gaps</h3>
+        <p>Lines must break across long gaps. Missing periods are neither zero activity nor permission to interpolate.</p>
+        <div class="table-wrap"><table><thead><tr><th>Next observed timestamp</th><th>Elapsed days</th><th>Display treatment</th></tr></thead><tbody>
+          {% for r in gap_rows %}<tr><td>{{ r.date }}</td><td>{{ '%.1f'|format(r.gap_days) }}</td><td>{% if r.gap_days > 7 %}<strong>Break line + shade gap</strong>{% else %}Normal interval{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>
+      </article>
     </section>
 
-    <!-- 06 Interpretation -->
+    <!-- 06 Validation -->
+    <section id="validation" class="section">
+      <p class="eyebrow">06 / MODEL DIAGNOSTICS &amp; ROBUSTNESS · CO 4</p>
+      <h2>Try to falsify the apparent relationship.</h2>
+      {% if diagnostics.available %}
+      <article class="panel">
+        <div class="metrics">
+          <div class="metric"><p>Matched N</p><strong>{{ diagnostics.n }}</strong></div>
+          <div class="metric"><p>Controlled rain coefficient</p><strong>{{ '%.3f'|format(diagnostics.rain_coef) }}</strong></div>
+          <div class="metric"><p>95% HC3 interval</p><strong>{{ '%.2f'|format(diagnostics.rain_ci[0]) }} to {{ '%.2f'|format(diagnostics.rain_ci[1]) }}</strong></div>
+          <div class="metric"><p>p-value</p><strong>{{ '%.4f'|format(diagnostics.rain_pvalue) }}</strong></div>
+          <div class="metric"><p>Durbin–Watson</p><strong>{{ '%.2f'|format(diagnostics.durbin_watson) }}</strong></div>
+          <div class="metric"><p>Breusch–Pagan p</p><strong>{{ '%.4f'|format(diagnostics.breusch_pagan_pvalue) }}</strong></div>
+          <div class="metric"><p>Time-split MAE</p><strong>{{ '%.1f'|format(diagnostics.test_mae) }}</strong></div>
+          <div class="metric"><p>Median baseline MAE</p><strong>{{ '%.1f'|format(diagnostics.baseline_mae) }}</strong></div>
+        </div>
+        <p class="note">HC3 addresses heteroscedastic standard errors; it does not make an observational coefficient causal. Time-split error is evaluated on the final 20% of observations.</p>
+      </article>
+      <div class="two-col">
+        <article class="panel"><h3>Subset sensitivity</h3><div class="table-wrap"><table><thead><tr><th>Subset</th><th>N</th><th>Pearson</th><th>Spearman</th></tr></thead><tbody>{% for r in diagnostics.sensitivity %}<tr><td>{{ r.label }}</td><td>{{ r.n }}</td><td>{{ '%.3f'|format(r.pearson) if r.pearson == r.pearson else 'N/A' }}</td><td>{{ '%.3f'|format(r.spearman) if r.spearman == r.spearman else 'N/A' }}</td></tr>{% endfor %}</tbody></table></div></article>
+        <article class="panel"><h3>Lagged rain association</h3><div class="table-wrap"><table><thead><tr><th>Lag</th><th>N</th><th>Spearman</th></tr></thead><tbody>{% for r in diagnostics.lagged %}<tr><td>{{ r.lag }} intervals</td><td>{{ r.n }}</td><td>{{ '%.3f'|format(r.correlation) }}</td></tr>{% endfor %}</tbody></table></div></article>
+      </div>
+      {% else %}<article class="panel"><h3>Inference intentionally unavailable</h3><p>{{ diagnostics.reason }}</p><p class="note">The interface refuses to manufacture a coefficient when coverage or variation is insufficient.</p></article>{% endif %}
+    </section>
+
+    <!-- 07 Correlation & Math -->
+    {% include 'eda_math.html' %}
+
+    <!-- 08 Interpretation -->
     <section id="conclusions" class="section">
-      <p class="eyebrow">06 / PRESENTATION TAKEAWAYS</p>
+      <p class="eyebrow">08 / PRESENTATION TAKEAWAYS</p>
       <h2>Present conclusions supported by empirical evidence.</h2>
       <article class="panel">
         <h3>Recommended Presentation Sequence</h3>
@@ -281,14 +358,12 @@
           <li>Explain preprocessing exclusions and data accounting transparently.</li>
           <li>Contrast mean against median to highlight skewness and extreme tail events.</li>
           <li>Compare precipitation bins alongside day-of-week baselines.</li>
-          <li>Formulate defensible empirical elasticities; distinguish correlation from causation.</li>
+          <li>Report observed, proxy, estimated and hypothetical quantities using separate labels.</li>
+          <li>Formulate bounded associations; distinguish correlation from causation and avoid cross-case coefficient rankings.</li>
         </ol>
         <a href="/" class="text-link">Transition to the Executive Intelligence Platform &rarr;</a>
       </article>
     </section>
-
-    <!-- 07 Correlation & Math -->
-    {% include 'eda_math.html' %}
 
   </main>
   <footer>

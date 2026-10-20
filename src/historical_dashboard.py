@@ -92,7 +92,8 @@ def slice_history(frame,horizon,quarterly=False):
     days = int(found.group(1)) if found else None
     if days is None:
         days = 180
-    return frame.loc[frame.date >= latest-pd.Timedelta(days=days-1)].copy()
+    cutoff = latest - pd.DateOffset(days=int(days)-1)
+    return frame.loc[frame.date >= cutoff].copy()
 
 
 def build_portfolio(key,city,horizon,index=None):
@@ -132,6 +133,7 @@ def build_portfolio(key,city,horizon,index=None):
     selected_history = slice_history(frame,horizon,quarterly).reset_index(drop=True)
     history = selected_history.copy()
     range_breaks = []
+    gap_intervals = []
     labels = lambda ds: [f'{d.year}-Q{d.quarter}' if quarterly else d.strftime('%a') for d in ds]
     icon = lambda row: ('Estimated ' if row.weather_estimated else '') + ('Rain' if row.rain>0 else 'Dry')
     identity = {'key':key,'name':cfg['name'],'clean_label':cfg['clean_name'],'color':cfg['color'],'symbol':cfg['symbol'],'currency':'GBP' if key == 'online_retail' else 'USD'}
@@ -165,13 +167,26 @@ def build_portfolio(key,city,horizon,index=None):
             model['description'] += ' The interval includes zero; the direction of the effect is uncertain.'
         insight['bullets'][-1] = model['description']
     weather_label = 'London, UK regional proxy (Open-Meteo historical reanalysis)' if key == 'online_retail' else ('New York City historical reanalysis' if key in ('nyc_taxi','citibike_nyc') else 'Estimated representative quarterly climate scenario')
+    # Preserve elapsed time and insert explicit nulls so charts never connect long
+    # unobserved periods. The gap itself remains visible and is shaded by the UI.
+    gap_limit = 370 if quarterly else 31
+    plot_dates, plot_actual, plot_baseline = [], [], []
+    for i, row in history.iterrows():
+        if i and (row.date-history.iloc[i-1].date).days > gap_limit:
+            previous = history.iloc[i-1].date
+            midpoint = previous + (row.date-previous)/2
+            plot_dates.append(midpoint.strftime('%Y-%m-%d'))
+            plot_actual.append(None); plot_baseline.append(None)
+            gap_intervals.append({'x0':previous.strftime('%Y-%m-%d'),'x1':row.date.strftime('%Y-%m-%d')})
+        plot_dates.append(row.date.strftime('%Y-%m-%d'))
+        plot_actual.append(number(row.revenue)); plot_baseline.append(number(row.baseline))
     weather_dates = pd.date_range(selected_history.date.min(), selected_history.date.max(),freq='D') if not quarterly else selected_history.date
     calendar_weather = weather_for(weather_dates,key)
-    scope = f'Historical data: {SCOPE[key]}. Live scenario city: {city}; changing it does not relocate this dataset. Weather: {weather_label}. Revenue points are joined across all dates for presentation; connecting segments are visual estimates, not additional sales observations. Missing weather uses estimated seasonal values.'
+    scope = f'Historical data: {SCOPE[key]}. Live scenario city: {city}; changing it does not relocate this dataset. Weather: {weather_label}. Revenue lines break across gaps longer than {gap_limit} days; shaded regions are unobserved, not zero. Missing weather estimates are labelled and remain separate from academic EDA.'
     diagnostics = []
     if not model.get('estimated'):
         baseline_mean = frame.revenue.mean()
         diagnostics = [{'num':1,'metric':cfg['clean_name'],'baseline':f'{baseline_mean:,.2f} revenue units/day','raw_temp_corr':number(frame.revenue.corr(frame.temperature)), 'adj_temp_impact':'Control variable','raw_rain_corr':number(frame.revenue.corr(frame.rain)),'adj_rain_impact':f"{model['rain_coefficient']:+,.2f} revenue units/mm",'r2':f"{model['r_squared']:.3f} (in-sample)",'reliability':f"p={model['rain_pvalue']:.3g}; 95% CI {model['rain_ci95'][0]:,.2f} to {model['rain_ci95'][1]:,.2f}"}]
     if model.get('estimated'):
         diagnostics = [{'num':1,'metric':cfg['clean_name']+' (estimated comparison)','baseline':f'{frame.baseline.mean():,.2f}','raw_temp_corr':number(frame.revenue.corr(frame.temperature)) or 0.0,'adj_temp_impact':'Seasonal scenario','raw_rain_corr':number(frame.revenue.corr(frame.rain)) or 0.0,'adj_rain_impact':'Baseline deviation','r2':'Descriptive comparison','reliability':'Estimated; no inferential significance claimed'}]
-    return {'cadence':cfg['cadence'],'cadence_label':cfg['cadence_label'],'is_real':True,'primary_key':key,'business_name':cfg['clean_name'],'currency':identity['currency'],'source_location':SCOPE[key],'scenario_city':city,'scope_notice':scope,'impact_model':model,'estimation':{'weather_rows':int(frame.weather_estimated.sum()),'baseline_rows':int(missing_baseline.sum())},'coverage':{'first':str(frame.date.min().date()),'last':str(frame.date.max().date()),'observations':len(frame),'selected_observations':len(selected_history)},'metrics':{'total_week_actual':actual,'total_week_base':total_base,'total_week_impact':total_impact,'total_rain_week':number(recent.rain.sum()) if recent.rain.notna().all() else None,'portfolio_count':1},'chart_7d':chart,'day_in_review':{'inspected_idx':index,'date_str':chosen.date.strftime('%Y-%m-%d'),'day_name':labels([chosen.date])[0],'weather_icon':icon(chosen),'temperature':number(chosen.temperature),'rain':number(chosen.rain),'insights':[insight],'hourly_table':records},'historical_timeline':{'range_breaks':range_breaks,'currency':identity['currency'],'weather_label':weather_label,'weather_dates':pd.DatetimeIndex(weather_dates).strftime('%Y-%m-%d').tolist(),'weather_rainfall':values(calendar_weather.rain),'dates':history.date.dt.strftime('%Y-%m-%d').tolist(),'display_dates':history.date.dt.strftime('%b %d, %Y').tolist(),'rainfall':values(history.rain),'temperatures':values(history.temperature),'businesses':[{**identity,'actual':values(history.revenue),'baseline':values(history.baseline)}]},'econometrics_table':diagnostics}
+    return {'cadence':cfg['cadence'],'cadence_label':cfg['cadence_label'],'is_real':True,'primary_key':key,'business_name':cfg['clean_name'],'currency':identity['currency'],'source_location':SCOPE[key],'scenario_city':city,'scope_notice':scope,'impact_model':model,'estimation':{'weather_rows':int(frame.weather_estimated.sum()),'baseline_rows':int(missing_baseline.sum())},'coverage':{'first':str(frame.date.min().date()),'last':str(frame.date.max().date()),'observations':len(frame),'selected_observations':len(selected_history)},'metrics':{'total_week_actual':actual,'total_week_base':total_base,'total_week_impact':total_impact,'total_rain_week':number(recent.rain.sum()) if recent.rain.notna().all() else None,'portfolio_count':1},'chart_7d':chart,'day_in_review':{'inspected_idx':index,'date_str':chosen.date.strftime('%Y-%m-%d'),'day_name':labels([chosen.date])[0],'weather_icon':icon(chosen),'temperature':number(chosen.temperature),'rain':number(chosen.rain),'insights':[insight],'hourly_table':records},'historical_timeline':{'range_breaks':range_breaks,'gap_intervals':gap_intervals,'currency':identity['currency'],'weather_label':weather_label,'weather_dates':pd.DatetimeIndex(weather_dates).strftime('%Y-%m-%d').tolist(),'weather_rainfall':values(calendar_weather.rain),'dates':plot_dates,'display_dates':plot_dates,'rainfall':values(history.rain),'temperatures':values(history.temperature),'businesses':[{**identity,'actual':plot_actual,'baseline':plot_baseline}]},'econometrics_table':diagnostics}

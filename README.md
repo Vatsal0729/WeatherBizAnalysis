@@ -5,10 +5,10 @@
 [![Alternative Dashboard](https://img.shields.io/badge/Dashboard-Streamlit_8501-FF4B4B.svg)](http://localhost:8501)
 [![Econometrics](https://img.shields.io/badge/Econometrics-TWFE_Panel_OLS-10B981.svg)](https://www.statsmodels.org/)
 [![Visualization](https://img.shields.io/badge/Visualization-Plotly_Dark-6366F1.svg)](https://plotly.com/)
-[![Tests](https://img.shields.io/badge/Tests-20_Passed-success.svg)](https://pytest.org/)
+[![Tests](https://img.shields.io/badge/Tests-54_Passed-success.svg)](https://pytest.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An enterprise analytics platform that measures, isolates, and forecasts the real-world financial impact of weather events on commercial enterprises. Using econometric Two-Way Fixed Effects (TWFE) models, it separates genuine weather alpha from seasonal calendar confounding across multiple industries, maps cross-business domino cascades, and provides live scenario simulations with 7-day predictive forward revenue forecasting.
+An evidence-first exploratory analysis platform for four independent weather-and-commerce case studies. It separates observed records, regional proxies, fitted associations, estimated values and hypothetical scenarios. The cases share a reproducible EDA workflow, but their coefficients are not treated as directly comparable or causal.
 
 ---
 
@@ -49,7 +49,7 @@ The repository provides a dual presentation architecture designed for both execu
 * **Interactive Day in Review**: Granular daily audits with baseline contrast, dollar shifts, and weather elasticity breakdowns.
 
 ### 2. Academic EDA Presentation (`/eda`)
-* **7-Chapter Guided Walkthrough**:
+* **8-Chapter Guided Walkthrough**:
   1. *01 Collection & Structure*: Unit of observation, time cadence, and source provenance.
   2. *02 Preprocessing & Auditing*: Transparent raw-to-clean accounting tables and transformation manifests.
   3. *03 Descriptive Statistics*: Spread, skewness, excess kurtosis, and Tukey fence outlier detection ($Q_1 - 1.5\text{IQR}$ to $Q_3 + 1.5\text{IQR}$).
@@ -57,10 +57,12 @@ The repository provides a dual presentation architecture designed for both execu
   5. *05 Temporal Exploration*: Isolating day-of-week commute patterns and longitudinal multi-year trendlines.
   6. *06 Presentation Takeaways*: Defensible empirical conclusions separating association from causation.
   7. *07 Correlation & Mathematics*: Expandable step-by-step mathematical derivations with worked covariance and slope calculations.
+  8. *08 Interpretation*: Claim boundaries, limitations, and observed-versus-estimated conclusions.
+* **Evidence checks**: Dataset scorecards, missingness-by-period, MCAR/MAR/MNAR discussion, IQR and Isolation Forest flags, log-skew comparison, Pearson/Spearman sensitivity, lag checks, residual diagnostics, VIF, HC3 intervals and time-split error.
 * **Dynamic Dataset Matrix Filtering**: Real-time filtering by Series, Year, Season, and Day Type (Weekdays vs. Weekends) with automated parameter clamping and clear notice alerts.
 
 ### 3. Notebook Walkthrough (`/notebook`)
-* **Executable Pipeline Stepper**: Seven interactive stages pairing executable Python snippets with live verified intermediate outputs, summary metrics, and mathematical formulas.
+* **Executable Pipeline Stepper**: Twelve stages read directly from `notebooks/weather_impact_analysis.ipynb`, pairing executable Python with live outputs, summary metrics and formulas.
 * **Audit Accounting & Provable Math**: Interactive worked tables matching manual Pearson formulas to Pandas outputs.
 
 ### 4. Alternative Streamlit Application (`app.py`)
@@ -81,20 +83,13 @@ The platform replaces synthetic benchmarks with four multi-cadence production da
 
 ---
 
-## 📐 Econometric Findings & Elasticities
+## 📐 Statistical interpretation
 
-Using Two-Way Fixed Effects (TWFE) panel regressions, the platform controls for entity and calendar fixed effects:
+The academic layer reports descriptive and controlled **associations**, not universal weather elasticities. Where at least 40 observed matched rows and a full-rank design exist, it fits:
 
-$$Y_{it} = \alpha_i + \gamma_t + \beta_1 \text{Rain}_{it} + \beta_2 \text{TempDev}_{it} + \beta_3 \text{Snow}_{it} + \varepsilon_{it}$$
+$$Y_t = \alpha + \beta_1 \text{Rain}_t + \beta_2 \text{Temperature}_t + \beta_3 \text{Wind}_t + \gamma_{\text{weekday}} + \delta_{\text{month}} + \theta\text{Trend}_t + \varepsilon_t$$
 
-| Sector & Target Metric | Weather Driver | TWFE Coefficient ($\beta$) | Significance | Empirical Economic Impact |
-| :--- | :--- | :--- | :--- | :--- |
-| **On-Demand Food Delivery** | Rainfall ($+1\text{ mm/h}$) | $+1.42\%$ volume | $p < 0.001$, $R^2=0.891$ | $+15\%$ to $+40\%$ order surges during downpours |
-| **Courier Network Supply** | Severe Rain ($>5\text{ mm/h}$) | $-20.5\%$ active couriers | $p < 0.001$, $R^2=0.843$ | Supply crunch triggers surge pricing to $2.2\times$ |
-| **Micromobility Bike-Share** | Rainfall ($+1\text{ mm/h}$) | $-8.40\%$ rides | $p < 0.001$, $R^2=0.912$ | Commuters rapidly abandon bikes for transit and cabs |
-| **Dine-In Restaurants** | Severe Rain ($>5\text{ mm/h}$) | $-55.0\%$ seat occupancy | $p < 0.001$, $R^2=0.876$ | Patio closures and high cancellation rates |
-| **Power Grid Electricity** | Heat Anomaly ($>25^\circ\text{C}$) | $+1.85\%$ MW load per $^\circ\text{C}$ | $p < 0.001$, $R^2=0.945$ | Air conditioning demand spikes grid consumption |
-| **Freight Dispatch** | Snowfall ($+1\text{ cm}$) | $+4.20\text{ min}$ transit delay | $p < 0.001$, $R^2=0.865$ | Highway bottlenecks reduce fulfillment throughput |
+Results include HC3 confidence intervals, residual diagnostics, collinearity checks, time-ordered holdout error and subset sensitivity. Retail proxy weather and company-wide SEC revenue do not receive unsupported local causal interpretations. Scenario coefficients belong to the separate hypothetical simulator.
 
 ---
 
@@ -196,7 +191,7 @@ Open your browser at **`http://localhost:8501`**.
 ```bash
 pytest tests/ -v
 ```
-All 20 test cases pass across connectors, pipelines, production datasets, and web endpoints.
+All 54 test cases pass across connectors, pipelines, production datasets, refresh logic, EDA evidence and web endpoints.
 
 ### 5. Generate Reports & Presentation Deck
 ```bash

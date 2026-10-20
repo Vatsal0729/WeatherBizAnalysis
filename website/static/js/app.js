@@ -756,17 +756,7 @@ function renderDayInReview(dayReview, chart7d, cadence) {
 // Render Tab 2 Historical Timeline Chart
 function renderHistoricalChart(hist, cadence) {
     const traces = [];
-    const timeBreaks = [...(hist.range_breaks || [])];
-    const day = 86400000;
-    const gapLimit = (cadence === "quarterly" ? 370 : 31) * day;
-    hist.dates.forEach((date, i) => {
-        if (!i) return;
-        const previous = Date.parse(hist.dates[i - 1]);
-        if (Date.parse(date) - previous > gapLimit) {
-            // Retain two visible days for a short connector between recorded periods.
-            timeBreaks.push({bounds: [new Date(previous + 2 * day).toISOString().slice(0, 10), date]});
-        }
-    });
+    const timeBreaks = [];
     const weatherDates = hist.weather_dates || hist.dates;
     const weatherRain = hist.weather_rainfall || hist.rainfall;
     const visibleWeather = weatherDates.map((date, i) => ({date, rain: weatherRain[i]}))
@@ -777,7 +767,7 @@ function renderHistoricalChart(hist, cadence) {
         traces.push({
             x: hist.dates,
             y: b.actual,
-            connectgaps: true,
+            connectgaps: false,
             name: `${b.clean_label} — Actual`,
             mode: "lines+markers",
             legendgroup: b.key,
@@ -792,7 +782,7 @@ function renderHistoricalChart(hist, cadence) {
             traces.push({
                 x: hist.dates,
                 y: b.baseline,
-                connectgaps: true,
+                connectgaps: false,
                 name: `${b.clean_label} — Baseline`,
                 mode: "lines",
                 legendgroup: b.key,
@@ -822,7 +812,8 @@ function renderHistoricalChart(hist, cadence) {
         plot_bgcolor: "#ffffff",
         font: { family: "Inter, -apple-system, sans-serif", size: 11, color: "#172f2b" },
         height: 520,
-        annotations: hist.range_breaks?.length ? [{text: "Long periods without sales records are omitted from the time axis",xref:"paper",yref:"paper",x:0,y:1.08,showarrow:false,font:{size:10,color:"#64736c"}}] : [],
+        annotations: hist.gap_intervals?.length ? [{text: "Shaded spans are unobserved periods; lines intentionally break",xref:"paper",yref:"paper",x:0,y:1.08,showarrow:false,font:{size:10,color:"#8c5215"}}] : [],
+        shapes: (hist.gap_intervals || []).map(gap => ({type:"rect",xref:"x",yref:"paper",x0:gap.x0,x1:gap.x1,y0:0,y1:1,fillcolor:"rgba(178,118,55,.10)",line:{width:0},layer:"below"})),
         margin: { l: 85, r: 25, t: 30, b: 130 },
         grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
         yaxis: {

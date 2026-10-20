@@ -13,6 +13,9 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+.deck-build/
+.deck-inspect/
+.doc-build/
 
 # Environments
 .env

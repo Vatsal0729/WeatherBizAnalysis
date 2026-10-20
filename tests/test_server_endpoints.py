@@ -100,5 +100,5 @@ def test_notebook_walkthrough(client):
     res_nb = client.get("/notebook")
     assert res_nb.status_code == 200
     assert b"Notebook Walkthrough" in res_nb.data
-    assert b"Load current Parquet snapshots" in res_nb.data
+    assert b"Define scope before comparison" in res_nb.data
 

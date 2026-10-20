@@ -80,17 +80,21 @@ def test_retail_proxy_has_daily_rain_even_without_sales(monkeypatch,tmp_path):
     assert np.isfinite(result['metrics']['total_week_impact'])
 
 @pytest.mark.parametrize('key',['nyc_taxi','citibike_nyc','online_retail','chipotle_sec'])
-def test_all_timelines_are_continuous_numeric_and_sources_unchanged(key):
+def test_timelines_break_long_gaps_and_sources_remain_unchanged(key):
     import hashlib
     path = Path(history.REAL_BUSINESS_CATALOG[key]['data_file'])
     before = hashlib.sha256(path.read_bytes()).hexdigest()
     result = history.build_portfolio(key,'NYC','Full Available History')
     timeline = result['historical_timeline']
     assert timeline['range_breaks'] == []
-    assert all(np.isfinite(x) for x in timeline['businesses'][0]['actual'])
-    assert all(np.isfinite(x) for x in timeline['businesses'][0]['baseline'])
+    actual = timeline['businesses'][0]['actual']
+    baseline = timeline['businesses'][0]['baseline']
+    assert all(x is None or np.isfinite(x) for x in actual)
+    assert all(x is None or np.isfinite(x) for x in baseline)
+    if timeline['gap_intervals']:
+        assert any(x is None for x in actual)
     assert all(np.isfinite(x) for x in timeline['weather_rainfall'])
-    assert 'visual estimates' in result['scope_notice']
+    assert 'lines break across gaps' in result['scope_notice']
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before
 
 def test_weather_estimates_are_stable_across_date_filters(monkeypatch,tmp_path):
@@ -125,5 +129,5 @@ def test_notebook_examples_execute_against_current_data():
             exec(compile(stage['code'],f"stage-{stage['number']}",'exec'),namespace)
     assert context['dataset_counts']['nyc_taxi'] == len(load_real_dataset('nyc_taxi'))
     assert namespace['result']['pearson'] == pytest.approx(context['math_report']['pearson_r'])
-    assert namespace['report']['n'] > 0
-    assert 'HC3' in context['stages'][-1]['math']
+    assert namespace['diagnostics']['n'] > 0
+    assert any('HC3' in stage['math'] for stage in context['stages'])
