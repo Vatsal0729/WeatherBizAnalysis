@@ -12,6 +12,12 @@ An evidence-first exploratory analysis platform for four independent weather-and
 
 ---
 
+## Deploying on Vercel
+
+Use the repository root as Root Directory, select Flask, and leave Build Command and Output Directory overrides unset. `pyproject.toml` selects `website.server:app`, while root `app.py` remains the separate Streamlit interface. The configured build script copies website assets to `public/static` for Vercel CDN serving with the existing URLs.
+
+Local startup remains `python website/server.py`. Dataset refreshes run separately; deploy updated snapshots when needed. In-memory custom business settings are temporary and are not shared across serverless instances.
+
 ## Dataset refreshes
 
 Run from this project directory:

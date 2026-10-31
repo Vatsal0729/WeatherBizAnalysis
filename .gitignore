@@ -35,3 +35,7 @@ Thumbs.db
 # Refresh scratch and recovery copies
 work/
 *.parquet.bak
+
+# Vercel generated assets and local project metadata
+/public/static/
+.vercel/
